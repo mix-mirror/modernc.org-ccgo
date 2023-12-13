@@ -25,7 +25,7 @@ require (
 	golang.org/x/sys v0.14.0 // indirect
 	lukechampine.com/uint128 v1.2.0 // indirect
 	modernc.org/cc/v3 v3.41.0 // indirect
-	modernc.org/libc v1.37.1 // indirect
+	modernc.org/libc v1.37.2 // indirect
 	modernc.org/memory v1.7.2 // indirect
 	modernc.org/sortutil v1.2.0 // indirect
 	modernc.org/token v1.1.0 // indirect
