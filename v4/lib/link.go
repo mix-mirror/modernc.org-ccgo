@@ -1188,8 +1188,138 @@ func (l *linker) postProcess(fn string, b []byte) (r []byte) {
 		w++
 	}
 	lines = lines[:w]
-	return []byte(strings.Join(lines, "\n"))
+	r = []byte(strings.Join(lines, "\n"))
+	return r
+	// gc.ExtendedErrors = true
+	// cfg := &gc.ParseSourceFileConfig{}
+	// src, err := gc.ParseSourceFile(cfg, fn, r)
+	// if err != nil {
+	// 	return r
+	// }
+
+	// // trc("\n==== (A0)\n%s\n==== (Z0)", src.Source(true))
+
+	// pkg, err := gc.NewPackage("example.com/foo", []*gc.SourceFile{src})
+	// if err != nil {
+	// 	return r
+	// }
+
+	// pkg.Check(checker{})
+
+	// // trc("\n==== (A)\n%s\n==== (Z)", pkg.SourceFiles[0].Source(true))
+	// l.walk(pkg, func(n any) (r gc.Node) {
+	// 	return nil
+	// 	switch x := n.(type) {
+	// 	case *gc.Conversion:
+	// 		switch y := x.Expr.(type) {
+	// 		case *gc.BasicLit:
+	// 			// nop
+	// 		default:
+	// 			panic(todo("%v: %T %v %s %v", x.Position(), y, x.Type(), x.Source(false), y.Type()))
+	// 		}
+	// 	}
+	// 	return nil
+	// })
+
+	// return pkg.SourceFiles[0].Source(true)
 }
+
+// var _ gc.PackageChecker = checker{}
+//
+// type checker struct{}
+//
+// // PackageLoader returns a package by its import path or an error, if any. The
+// // type checker never calls PackageLoader for  certain packages.
+// func (checker) PackageLoader(pkg *gc.Package, src *gc.SourceFile, importPath string) (*gc.Package, error) {
+// 	// panic(todo("%+v %+v %q", pkg, src, importPath))
+// 	// trc("%q %q %v: %q", pkg.ImportPath, pkg.Name, src.EOF.Position(), importPath)
+// 	return nil, nil
+// }
+//
+// // SymbolResolver returns the node bound to 'ident' within package 'pkg', using
+// // currentScope and fileScope or an error, if any. The type checker never calls
+// // SymbolResolver for certain identifiers of some packages.
+// func (checker) SymbolResolver(currentScope, fileScope *gc.Scope, pkg *gc.Package, ident gc.Token) (gc.Node, error) {
+// 	// panic(todo("%q %q %q", pkg.ImportPath, pkg.Name, ident))
+// 	for ; currentScope != nil; currentScope = currentScope.Parent {
+// 		if currentScope == fileScope {
+// 			fileScope = nil
+// 		}
+//
+// 		if n := currentScope.Nodes[ident.Src()]; n.Node != nil && (n.VisibleFrom == 0 || n.VisibleFrom > ident.Offset()) {
+// 			// trc("%q found", ident.Src())
+// 			return n.Node, nil
+// 		}
+// 	}
+//
+// 	if fileScope != nil {
+// 		// trc("%q found in fileScope", ident.Src())
+// 		return fileScope.Nodes[ident.Src()].Node, nil
+// 	}
+//
+// 	// trc("%q not found", ident.Src())
+// 	return nil, nil
+// }
+//
+// // CheckFunctions reports whether Check should type check function/method
+// // bodies.
+// func (checker) CheckFunctions() bool {
+// 	return true
+// }
+//
+// // GOARCH reports the target architecture, it returns the same values as runtime.GOARCH.
+// func (checker) GOARCH() string {
+// 	panic(todo(""))
+// }
+//
+// func (l *linker) walk(n any, fn func(n any) gc.Node) gc.Node {
+// 	if n == nil {
+// 		return nil
+// 	}
+//
+// 	if _, ok := n.(gc.Token); ok {
+// 		return nil
+// 	}
+//
+// 	t := reflect.TypeOf(n)
+// 	v := reflect.ValueOf(n)
+// 	if t.Kind() == reflect.Pointer {
+// 		t = t.Elem()
+// 		v = v.Elem()
+// 	}
+// 	if v == zeroReflectValue || v.IsZero() {
+// 		return nil
+// 	}
+//
+// 	switch t.Kind() {
+// 	case reflect.Struct:
+// 		nf := t.NumField()
+// 		for i := 0; i < nf; i++ {
+// 			f := t.Field(i)
+// 			if !f.IsExported() {
+// 				continue
+// 			}
+//
+// 			l.walk2(v, l.walk(v.Field(i).Interface(), fn))
+// 		}
+// 	case reflect.Slice:
+// 		ne := v.Len()
+// 		for i := 0; i < ne; i++ {
+// 			l.walk2(v, l.walk(v.Index(i).Interface(), fn))
+// 		}
+// 	}
+// 	return fn(n)
+// }
+//
+// func (l *linker) walk2(v reflect.Value, newNode gc.Node) {
+// 	if newNode != nil {
+// 		switch v.Interface().(type) {
+// 		case gc.ExprListItem:
+// 			v = v.Field(0)
+// 			v.Set(reflect.ValueOf(newNode))
+// 		}
+// 	}
+// }
 
 func isJsonMeta(linkName string) bool {
 	return strings.HasPrefix(linkName, tag(meta)) && linkName[len(tag(meta)):] == jsonMetaRawName

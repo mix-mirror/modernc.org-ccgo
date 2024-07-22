@@ -772,7 +772,7 @@ func TestCSmith(t *testing.T) {
 	if nogcc {
 		t.Skip()
 	}
-	
+
 	abi, err := cc.NewABI(runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		t.Fatal(err)
