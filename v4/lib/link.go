@@ -1153,6 +1153,10 @@ var (
 			return errorf("%s", err)
 		}
 
+		if e := exec.Command("gofmt", "-s", "-w", "-r", "(x) -> x", ofn).Run(); e != nil {
+			l.err(errorf("%s: gofmt: %v", ofn, e))
+		}
+
 		if *oTraceG {
 			fmt.Fprintf(os.Stderr, "%s\n", b)
 		}
@@ -1189,137 +1193,172 @@ func (l *linker) postProcess(fn string, b []byte) (r []byte) {
 	}
 	lines = lines[:w]
 	r = []byte(strings.Join(lines, "\n"))
-	return r
-	// gc.ExtendedErrors = true
-	// cfg := &gc.ParseSourceFileConfig{}
-	// src, err := gc.ParseSourceFile(cfg, fn, r)
-	// if err != nil {
-	// 	return r
-	// }
+	gc.ExtendedErrors = true
+	cfg := &gc.ParseSourceFileConfig{}
+	src, err := gc.ParseSourceFile(cfg, fn, r)
+	if err != nil {
+		return r
+	}
 
-	// // trc("\n==== (A0)\n%s\n==== (Z0)", src.Source(true))
+	// trc("\n==== (A0)\n%s\n==== (Z0)", src.Source(true))
 
-	// pkg, err := gc.NewPackage("example.com/foo", []*gc.SourceFile{src})
-	// if err != nil {
-	// 	return r
-	// }
+	pkg, err := gc.NewPackage("example.com/foo", []*gc.SourceFile{src})
+	if err != nil {
+		return r
+	}
 
-	// pkg.Check(checker{})
+	pkg.Check(&checker{l.task.goarch})
 
-	// // trc("\n==== (A)\n%s\n==== (Z)", pkg.SourceFiles[0].Source(true))
-	// l.walk(pkg, func(n any) (r gc.Node) {
-	// 	return nil
-	// 	switch x := n.(type) {
-	// 	case *gc.Conversion:
-	// 		switch y := x.Expr.(type) {
-	// 		case *gc.BasicLit:
-	// 			// nop
-	// 		default:
-	// 			panic(todo("%v: %T %v %s %v", x.Position(), y, x.Type(), x.Source(false), y.Type()))
-	// 		}
-	// 	}
-	// 	return nil
-	// })
+	// trc("\n==== (A)\n%s\n==== (Z)", pkg.SourceFiles[0].Source(true))
+	l.walk(src, func(v any) {
+		switch x := v.(type) {
+		case reflect.Value:
+			if x == zeroReflectValue || x.IsZero() {
+				return
+			}
 
-	// return pkg.SourceFiles[0].Source(true)
+			switch y := x.Interface().(type) {
+			case *gc.Conversion:
+				switch z := y.Expr.(type) {
+				default:
+					trc("%v: TODOE %T", y.Position(), z)
+				}
+				if y.Type() != y.Expr.Type() {
+					trc("%v: %v != %v (%q %q)", y.Position(), y.Type(), y.Expr.Type(), y.Source(false), y.Expr.Source(false))
+					break
+				}
+
+				// trc("1220: %v: %q", y.Position(), y.Source(false))
+				// x.Set(reflect.ValueOf(y.Expr))
+				y.ConvertType = nil
+			case *gc.Arguments:
+				trc("%v: TODOD %T %q pet=%T  %T", y.Position(), y, y.Source(false), y.PrimaryExpr, y.PrimaryExpr.Type())
+			}
+		default:
+			trc("1212: %T", x)
+		}
+	})
+
+	return src.Source(true)
 }
 
-// var _ gc.PackageChecker = checker{}
-//
-// type checker struct{}
-//
-// // PackageLoader returns a package by its import path or an error, if any. The
-// // type checker never calls PackageLoader for  certain packages.
-// func (checker) PackageLoader(pkg *gc.Package, src *gc.SourceFile, importPath string) (*gc.Package, error) {
-// 	// panic(todo("%+v %+v %q", pkg, src, importPath))
-// 	// trc("%q %q %v: %q", pkg.ImportPath, pkg.Name, src.EOF.Position(), importPath)
-// 	return nil, nil
-// }
-//
-// // SymbolResolver returns the node bound to 'ident' within package 'pkg', using
-// // currentScope and fileScope or an error, if any. The type checker never calls
-// // SymbolResolver for certain identifiers of some packages.
-// func (checker) SymbolResolver(currentScope, fileScope *gc.Scope, pkg *gc.Package, ident gc.Token) (gc.Node, error) {
-// 	// panic(todo("%q %q %q", pkg.ImportPath, pkg.Name, ident))
-// 	for ; currentScope != nil; currentScope = currentScope.Parent {
-// 		if currentScope == fileScope {
-// 			fileScope = nil
-// 		}
-//
-// 		if n := currentScope.Nodes[ident.Src()]; n.Node != nil && (n.VisibleFrom == 0 || n.VisibleFrom > ident.Offset()) {
-// 			// trc("%q found", ident.Src())
-// 			return n.Node, nil
-// 		}
-// 	}
-//
-// 	if fileScope != nil {
-// 		// trc("%q found in fileScope", ident.Src())
-// 		return fileScope.Nodes[ident.Src()].Node, nil
-// 	}
-//
-// 	// trc("%q not found", ident.Src())
-// 	return nil, nil
-// }
-//
-// // CheckFunctions reports whether Check should type check function/method
-// // bodies.
-// func (checker) CheckFunctions() bool {
-// 	return true
-// }
-//
-// // GOARCH reports the target architecture, it returns the same values as runtime.GOARCH.
-// func (checker) GOARCH() string {
-// 	panic(todo(""))
-// }
-//
-// func (l *linker) walk(n any, fn func(n any) gc.Node) gc.Node {
-// 	if n == nil {
-// 		return nil
-// 	}
-//
-// 	if _, ok := n.(gc.Token); ok {
-// 		return nil
-// 	}
-//
-// 	t := reflect.TypeOf(n)
-// 	v := reflect.ValueOf(n)
-// 	if t.Kind() == reflect.Pointer {
-// 		t = t.Elem()
-// 		v = v.Elem()
-// 	}
-// 	if v == zeroReflectValue || v.IsZero() {
-// 		return nil
-// 	}
-//
-// 	switch t.Kind() {
-// 	case reflect.Struct:
-// 		nf := t.NumField()
-// 		for i := 0; i < nf; i++ {
-// 			f := t.Field(i)
-// 			if !f.IsExported() {
-// 				continue
-// 			}
-//
-// 			l.walk2(v, l.walk(v.Field(i).Interface(), fn))
-// 		}
-// 	case reflect.Slice:
-// 		ne := v.Len()
-// 		for i := 0; i < ne; i++ {
-// 			l.walk2(v, l.walk(v.Index(i).Interface(), fn))
-// 		}
-// 	}
-// 	return fn(n)
-// }
-//
-// func (l *linker) walk2(v reflect.Value, newNode gc.Node) {
-// 	if newNode != nil {
-// 		switch v.Interface().(type) {
-// 		case gc.ExprListItem:
-// 			v = v.Field(0)
-// 			v.Set(reflect.ValueOf(newNode))
-// 		}
-// 	}
-// }
+func (l *linker) walk(v any, fn func(any)) {
+	switch x := v.(type) {
+	case gc.Node:
+		if x == nil {
+			return
+		}
+
+		if _, ok := x.(gc.Token); ok {
+			return
+		}
+
+		switch t := reflect.TypeOf(x); t.Kind() {
+		case reflect.Ptr:
+			switch t2 := t.Elem(); t2.Kind() {
+			case reflect.Struct:
+				xe := reflect.ValueOf(x).Elem()
+				if xe == zeroReflectValue || xe.IsZero() {
+					break
+				}
+
+				nf := t2.NumField()
+				for i := 0; i < nf; i++ {
+					f := t2.Field(i)
+					if !f.IsExported() {
+						continue
+					}
+
+					fv := xe.Field(i)
+					if !fv.CanSet() {
+						trc("%v: can't addr", x.Position())
+						continue
+					}
+
+					l.walk(fv, fn)
+				}
+			default:
+				trc("%v: TODOA %T %v", x.Position(), x, t2.Kind())
+			}
+		default:
+			trc("%v: TODOB %T %v", x.Position(), x, t.Kind())
+		}
+	case reflect.Value:
+		switch y := x.Interface().(type) {
+		case nil, *gc.Scope:
+			// nop
+		case gc.Node:
+			l.walk(y, fn)
+			fn(x)
+		default:
+			switch x.Kind() {
+			case reflect.Slice:
+				ne := x.Len()
+				for i := 0; i < ne; i++ {
+					ev := x.Index(i)
+					if !ev.CanSet() {
+						trc("can't addr slice elem %T", ev.Interface())
+						continue
+					}
+
+					l.walk(ev, fn)
+				}
+			default:
+				trc("TODOC %T %v", y, x.Kind())
+			}
+		}
+	default:
+		trc("%T", x)
+	}
+}
+
+var _ gc.PackageChecker = &checker{}
+
+type checker struct {
+	goarch string
+}
+
+// PackageLoader returns a package by its import path or an error, if any. The
+// type checker never calls PackageLoader for  certain packages.
+func (*checker) PackageLoader(pkg *gc.Package, src *gc.SourceFile, importPath string) (*gc.Package, error) {
+	// panic(todo("%+v %+v %q", pkg, src, importPath))
+	// trc("%q %q %v: %q", pkg.ImportPath, pkg.Name, src.EOF.Position(), importPath)
+	return nil, nil
+}
+
+// SymbolResolver returns the node bound to 'ident' within package 'pkg', using
+// currentScope and fileScope or an error, if any. The type checker never calls
+// SymbolResolver for certain identifiers of some packages.
+func (*checker) SymbolResolver(currentScope, fileScope *gc.Scope, pkg *gc.Package, ident gc.Token) (gc.Node, error) {
+	for ; currentScope != nil; currentScope = currentScope.Parent {
+		if currentScope == fileScope {
+			fileScope = nil
+		}
+
+		if n := currentScope.Nodes[ident.Src()]; n.Node != nil && (n.VisibleFrom == 0 || n.VisibleFrom <= ident.Offset()) {
+			return n.Node, nil
+		}
+	}
+
+	if fileScope != nil {
+		if r, ok := fileScope.Nodes[ident.Src()]; ok {
+			return r.Node, nil
+		}
+	}
+
+	return nil, nil
+}
+
+// CheckFunctions reports whether Check should type check function/method
+// bodies.
+func (*checker) CheckFunctions() bool {
+	return true
+}
+
+// GOARCH reports the target architecture, it returns the same values as runtime.GOARCH.
+func (c *checker) GOARCH() string {
+	return c.goarch
+}
 
 func isJsonMeta(linkName string) bool {
 	return strings.HasPrefix(linkName, tag(meta)) && linkName[len(tag(meta)):] == jsonMetaRawName
