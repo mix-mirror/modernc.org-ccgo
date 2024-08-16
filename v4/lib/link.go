@@ -1158,6 +1158,7 @@ var (
 		}
 
 		if *oTraceG {
+			b, _ = os.ReadFile(ofn)
 			fmt.Fprintf(os.Stderr, "%s\n", b)
 		}
 	}
@@ -1200,16 +1201,12 @@ func (l *linker) postProcess(fn string, b []byte) (r []byte) {
 		return r
 	}
 
-	// trc("\n==== (A0)\n%s\n==== (Z0)", src.Source(true))
-
 	pkg, err := gc.NewPackage("example.com/foo", []*gc.SourceFile{src})
 	if err != nil {
 		return r
 	}
 
 	pkg.Check(&checker{l.task.goarch})
-
-	// trc("\n==== (A)\n%s\n==== (Z)", pkg.SourceFiles[0].Source(true))
 	l.walk(src, func(v any) {
 		switch x := v.(type) {
 		case reflect.Value:
@@ -1219,23 +1216,12 @@ func (l *linker) postProcess(fn string, b []byte) (r []byte) {
 
 			switch y := x.Interface().(type) {
 			case *gc.Conversion:
-				switch z := y.Expr.(type) {
-				default:
-					trc("%v: TODOE %T", y.Position(), z)
-				}
-				if y.Type() != y.Expr.Type() {
-					trc("%v: %v != %v (%q %q)", y.Position(), y.Type(), y.Expr.Type(), y.Source(false), y.Expr.Source(false))
+				if y.IsUncheckedType() || y.Type() != y.Expr.Type() {
 					break
 				}
 
-				// trc("1220: %v: %q", y.Position(), y.Source(false))
-				// x.Set(reflect.ValueOf(y.Expr))
 				y.ConvertType = nil
-			case *gc.Arguments:
-				trc("%v: TODOD %T %q pet=%T  %T", y.Position(), y, y.Source(false), y.PrimaryExpr, y.PrimaryExpr.Type())
 			}
-		default:
-			trc("1212: %T", x)
 		}
 	})
 
@@ -1271,21 +1257,16 @@ func (l *linker) walk(v any, fn func(any)) {
 
 					fv := xe.Field(i)
 					if !fv.CanSet() {
-						trc("%v: can't addr", x.Position())
 						continue
 					}
 
 					l.walk(fv, fn)
 				}
-			default:
-				trc("%v: TODOA %T %v", x.Position(), x, t2.Kind())
 			}
-		default:
-			trc("%v: TODOB %T %v", x.Position(), x, t.Kind())
 		}
 	case reflect.Value:
 		switch y := x.Interface().(type) {
-		case nil, *gc.Scope:
+		case nil:
 			// nop
 		case gc.Node:
 			l.walk(y, fn)
@@ -1297,18 +1278,13 @@ func (l *linker) walk(v any, fn func(any)) {
 				for i := 0; i < ne; i++ {
 					ev := x.Index(i)
 					if !ev.CanSet() {
-						trc("can't addr slice elem %T", ev.Interface())
 						continue
 					}
 
 					l.walk(ev, fn)
 				}
-			default:
-				trc("TODOC %T %v", y, x.Kind())
 			}
 		}
-	default:
-		trc("%T", x)
 	}
 }
 
@@ -1321,8 +1297,6 @@ type checker struct {
 // PackageLoader returns a package by its import path or an error, if any. The
 // type checker never calls PackageLoader for  certain packages.
 func (*checker) PackageLoader(pkg *gc.Package, src *gc.SourceFile, importPath string) (*gc.Package, error) {
-	// panic(todo("%+v %+v %q", pkg, src, importPath))
-	// trc("%q %q %v: %q", pkg.ImportPath, pkg.Name, src.EOF.Position(), importPath)
 	return nil, nil
 }
 

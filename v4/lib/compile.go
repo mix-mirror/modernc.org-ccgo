@@ -254,6 +254,7 @@ type ctx struct {
 	imports             map[string]string // import path: qualifier
 	initPatch           func(int64, *buf)
 	inlineFuncs         map[*cc.Declarator]*cc.FunctionDefinition
+	inlineLabelSuffix   int
 	jsonMeta
 	macrosEmited  nameSet
 	maxAlign      int
@@ -307,6 +308,14 @@ func newCtx(task *Task, eh errHandler) *ctx {
 			WeakAliases: map[string]string{},
 		},
 	}
+}
+
+func (c *ctx) labelSuffix() string {
+	if c.f.inlineInfo == nil {
+		return ""
+	}
+
+	return fmt.Sprintf("__ccgo%d", c.f.inlineInfo.inlineLabelSuffix)
 }
 
 func (c *ctx) setBreakCtx(s string) func() {

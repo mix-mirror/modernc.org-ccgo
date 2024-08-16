@@ -194,7 +194,7 @@ func (c *ctx) mustConsume(n cc.ExpressionNode) (r bool) {
 func (c *ctx) labeledStatement(w writer, n *cc.LabeledStatement) {
 	switch n.Case {
 	case cc.LabeledStatementLabel: // IDENTIFIER ':' Statement
-		w.w("goto %s%s; %[1]s%s:;", tag(preserve), n.Token.Src()) //TODO use nameSpace
+		w.w("goto %s%s%s; %[1]s%s%s:;", tag(preserve), n.Token.Src(), c.labelSuffix())
 		c.statement(w, n.Statement)
 	case cc.LabeledStatementCaseLabel: // "case" ConstantExpression ':' Statement
 		switch {
@@ -277,7 +277,17 @@ func (c *ctx) compoundStatement(w writer, n *cc.CompoundStatement, fnBlock bool,
 		}
 		if c.f.callsAlloca {
 			switch c.task.target {
-			case "linux/amd64", "linux/arm64", "linux/loong64": // New alloca mechanism
+			case
+				"linux/386",
+				"linux/amd64",
+				"linux/arm",
+				"linux/arm64",
+				"linux/loong64",
+				"linux/ppc64le",
+				"linux/riscv64",
+				"linux/s390x":
+				// New alloca mechanism
+
 				w.w("%stls.AllocaEntry();", tag(ccgo))
 				w.w("\ndefer %stls.AllocaExit();", tag(ccgo))
 			default:
@@ -949,7 +959,7 @@ func (c *ctx) label() string { return fmt.Sprintf("%s_%d", tag(ccgo), c.id()) }
 func (c *ctx) jumpStatement(w writer, n *cc.JumpStatement) {
 	switch n.Case {
 	case cc.JumpStatementGoto: // "goto" IDENTIFIER ';'
-		w.w("goto %s%s;", tag(preserve), n.Token2.Src())
+		w.w("goto %s%s%s;", tag(preserve), n.Token2.Src(), c.labelSuffix())
 	case cc.JumpStatementGotoExpr: // "goto" '*' ExpressionList ';'
 		c.err(errorf("TODO %v", n.Case))
 	case cc.JumpStatementContinue: // "continue" ';'

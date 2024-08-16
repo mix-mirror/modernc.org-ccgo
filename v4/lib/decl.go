@@ -57,15 +57,16 @@ type flowCtx struct {
 func (c *flowCtx) new(stmt scoper) *flowCtx { return &flowCtx{parent: c, stmt: stmt} }
 
 type inlineInfo struct {
-	args           []*buf
-	exit           string
-	fd             *cc.FunctionDefinition
-	mode           mode
-	params         []*cc.Parameter
-	parent         *inlineInfo
-	replacedParams []string
-	result         string
-	vaOff          int64
+	args              []*buf
+	exit              string
+	fd                *cc.FunctionDefinition
+	inlineLabelSuffix int
+	mode              mode
+	params            []*cc.Parameter
+	parent            *inlineInfo
+	replacedParams    []string
+	result            string
+	vaOff             int64
 }
 
 type fnCtx struct {

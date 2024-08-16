@@ -207,18 +207,23 @@ func (t *Task) main() (err error) {
 			t.goos, t.goarch, IsExecEnv(), os.Getenv("CC"), t.args,
 		)
 	}
+
+	defer func() {
+		for _, v := range t.cleanupDirs {
+			os.RemoveAll(v)
+		}
+		t.cleanupDirs = nil
+		if dmesgs && err != nil {
+			dmesg("FAIL err=%v (%v: %v: %v:)", err, origin(1), origin(2), origin(3))
+		}
+	}()
+
 	switch len(t.args) {
 	case 0:
 		return errorf("invalid arguments")
 	case 1:
 		return errorf("no input files")
 	}
-
-	defer func() {
-		for _, v := range t.cleanupDirs {
-			os.RemoveAll(v)
-		}
-	}()
 
 	// Defaults
 	t.prefixField = "F"
@@ -496,7 +501,7 @@ func (t *Task) main() (err error) {
 		t.cfgArgs = append(t.cfgArgs, ldflag)
 	}
 
-	if t.goos == "windows" && (t.goarch == "386" || t.goarch == "amd64") {
+	if /* t.goos == "windows" && */ (t.goarch == "386" || t.goarch == "amd64") {
 		t.cfgArgs = append(t.cfgArgs,
 			"-mno-3dnow",
 			"-mno-abm",
@@ -669,6 +674,7 @@ func (t *Task) arExtract(fn string) (r []string, err error) {
 		return nil, errorf("%v", err)
 	}
 
+	t.cleanupDirs = append(t.cleanupDirs, tmp)
 	out, err := exec.Command(ar, "t", fn).CombinedOutput()
 	// 	if dmesgs {
 	// 		dmesg("fn=%s out=%s err=%v", fn, out, err)
@@ -684,9 +690,6 @@ func (t *Task) arExtract(fn string) (r []string, err error) {
 			r = append(r, w)
 		}
 		m[w] = struct{}{}
-	}
-	if !t.keepObjectFiles {
-		t.cleanupDirs = append(t.cleanupDirs, tmp)
 	}
 	switch runtime.GOOS {
 	case "freebsd", "darwin", "openbsd", "windows":

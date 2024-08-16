@@ -2464,6 +2464,7 @@ assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/ieee/minuszero.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/ieee/mul-subnormal-single-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/ieee/mzero2.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/ieee/mzero3.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/ieee/mzero4.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/ieee/mzero5.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/ieee/mzero6.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/ieee/pr28634.c
@@ -3909,6 +3910,7 @@ assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/ieee/minusz
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/ieee/mul-subnormal-single-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/ieee/mzero2.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/ieee/mzero3.c
+assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/ieee/mzero4.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/ieee/mzero5.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/ieee/mzero6.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/ieee/pr28634.c

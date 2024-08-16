@@ -61,7 +61,7 @@ func (c *ctx) nonTopExpr(w writer, n cc.ExpressionNode, to cc.Type, toMode mode)
 	return c.expr(w, n, to, toMode)
 }
 
-func (c *ctx) topExpr(w writer, n cc.ExpressionNode, to cc.Type, toMode mode) *buf {
+func (c *ctx) topExpr(w writer, n cc.ExpressionNode, to cc.Type, toMode mode) (r *buf) {
 	sv := c.exprNestLevel
 
 	defer func() { c.exprNestLevel = sv }()
@@ -3458,18 +3458,9 @@ func (c *ctx) postfixExpressionCall(w writer, n *cc.PostfixExpression, mode mode
 	for i, v := range args {
 		mode := exprDefault
 		var t cc.Type
-		unconvert := false
 		switch {
 		case i < len(params):
 			t = params[i].Type()
-			if t.Kind() == cc.Enum {
-				switch x := v.Value().(type) {
-				case cc.Int64Value:
-					unconvert = x >= 0
-				case cc.UInt64Value:
-					unconvert = true
-				}
-			}
 		default:
 			switch t = v.Type(); {
 			case cc.IsIntegerType(t):
@@ -3490,9 +3481,6 @@ func (c *ctx) postfixExpressionCall(w writer, n *cc.PostfixExpression, mode mode
 			xarg = c.checkVolatileExpr(w, v, t, mode)
 		default:
 			xarg = c.topExpr(w, v, t, mode)
-		}
-		if unconvert {
-			xarg = c.uncovertEnum(xarg)
 		}
 		xargs = append(xargs, xarg)
 		xtypes = append(xtypes, t)
@@ -3520,13 +3508,15 @@ func (c *ctx) postfixExpressionCall(w writer, n *cc.PostfixExpression, mode mode
 		}
 
 		sv := c.f.inlineInfo
+		c.inlineLabelSuffix++
 		nfo := &inlineInfo{
-			args:   xargs,
-			fd:     inlineFD,
-			mode:   mode,
-			params: params,
-			parent: c.f.inlineInfo,
-			vaOff:  vaOff,
+			args:              xargs,
+			fd:                inlineFD,
+			inlineLabelSuffix: c.inlineLabelSuffix,
+			mode:              mode,
+			params:            params,
+			parent:            c.f.inlineInfo,
+			vaOff:             vaOff,
 		}
 		c.f.inlineInfo = nfo
 
@@ -3618,17 +3608,6 @@ func (c *ctx) postfixExpressionCall(w writer, n *cc.PostfixExpression, mode mode
 		rmode = exprVoid
 	}
 	return &b, rt, rmode
-}
-
-func (c *ctx) uncovertEnum(b *buf) *buf {
-	s := string(b.bytes())
-	for strings.HasPrefix(s, "(") && strings.HasSuffix(s, ")") {
-		s = s[1 : len(s)-1]
-	}
-	if strings.HasSuffix(s, ")") && (strings.HasPrefix(s, tag(preserve)+"int32(") || strings.HasPrefix(s, tag(preserve)+"uint32(")) {
-		b.b = []byte("(" + s[strings.IndexByte(s, '(')+1:])
-	}
-	return b
 }
 
 func (c *ctx) normalizeParams(params []*cc.Parameter) []*cc.Parameter {

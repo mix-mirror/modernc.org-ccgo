@@ -15,6 +15,7 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/ccgo/bug/esc_e.c`:                                                                           {}, // EXEC FAIL: "assets/ccgo/bug/esc_e.c: 97"
 	`assets/ccgo/bug/init.c`:                                                                            {}, // EXEC FAIL: "assets/ccgo/bug/init.c: panic: runtime error: invalid memory address or nil pointer dereference"
 	`assets/ccgo/bug/objv.c`:                                                                            {}, // EXEC FAIL: "assets/ccgo/bug/objv.c: SIGILL: illegal instruction"
+	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20000715-2.c`:                                 {}, // EXEC FAIL
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20010206-1.c`:                                 {}, // EXEC FAIL: "assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20010206-1.c: SIGILL: illegal instruction"
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20101011-1.c`:                                 {}, // EXEC FAIL: "assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20101011-1.c: panic: runtime error: integer divide by zero"
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20141107-1.c`:                                 {}, // EXEC FAIL: "assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20141107-1.c: SIGILL: illegal instruction"

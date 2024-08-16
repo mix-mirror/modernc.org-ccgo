@@ -323,10 +323,11 @@ func (t *Task) mv(execMV, hostMV string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
+		_ = err
 		// if dmesgs {
 		// 	dmesg("SKIP: %s returns %v", execMV, err.(*exec.ExitError).ExitCode())
 		// }
-		return err
+		// return err
 	}
 
 	set := opt.NewSet()
@@ -366,10 +367,11 @@ func (t *Task) rm(execRM, hostRM string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
+		_ = err
 		// 		if dmesgs {
 		// 			dmesg("SKIP: %s returns %v", execRM, err.(*exec.ExitError).ExitCode())
 		// 		}
-		return err
+		// return err
 	}
 
 	rf := false
@@ -653,10 +655,11 @@ func (t *Task) ar(execAR, hostAR string) (err error) {
 	// 	}
 	// }
 	if err := cmd.Run(); err != nil {
+		_ = err
 		if dmesgs {
 			dmesg("SKIP: %s returns %v", execAR, err.(*exec.ExitError).ExitCode())
 		}
-		return err
+		// return err
 	}
 
 	set := opt.NewSet()
