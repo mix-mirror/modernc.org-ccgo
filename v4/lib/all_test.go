@@ -904,6 +904,8 @@ func TestCSmith(t *testing.T) {
 
 		//TODO linux/riscv64
 		"--max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --bitfields -s 1714958724",
+		//TODO linux/ppc64le
+		"--max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --bitfields -s 8032246412188002",
 	}
 	var ch <-chan time.Time
 	t0 := time.Now()

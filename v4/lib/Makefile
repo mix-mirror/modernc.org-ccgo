@@ -49,6 +49,10 @@ edit:
 	@touch log
 	@if [ -f "Session.vim" ]; then gvim -S & else gvim -p Makefile ../go.mod builder.json all_test.go ccgo.go & fi
 
+edit2:
+	@touch log
+	@if [ -f "Session.vim" ]; then novim -S & else novim -p Makefile ../go.mod builder.json all_test.go ccgo.go & fi
+
 editor:
 	stringer -output stringer.go -type mode,name
 	gofmt -l -s -w *.go

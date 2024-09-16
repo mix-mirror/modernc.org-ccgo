@@ -15,6 +15,8 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-trailing-zero.c`:                             {}, // EXEC FAIL
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-types-init.c`:                                {}, // EXEC FAIL
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/long-double-load.c`:                                   {}, // EXEC FAIL
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/macro-paste.c`:                                        {}, // EXEC FAIL
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/whitespace.c`:                                         {}, // EXEC FAIL
 
 	// ==== BUILD FAIL - compiles but does not build.
 

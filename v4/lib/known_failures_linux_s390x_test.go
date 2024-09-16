@@ -16,6 +16,7 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/ccgo/bug/init.c`:                                                                            {}, // EXEC FAIL: "assets/ccgo/bug/init.c: panic: runtime error: invalid memory address or nil pointer dereference"
 	`assets/ccgo/bug/objv.c`:                                                                            {}, // EXEC FAIL: "assets/ccgo/bug/objv.c: SIGILL: illegal instruction"
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20000715-2.c`:                                 {}, // EXEC FAIL
+	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20001203-2.c`:                                 {}, // EXEC FAIL
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20010206-1.c`:                                 {}, // EXEC FAIL: "assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20010206-1.c: SIGILL: illegal instruction"
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20101011-1.c`:                                 {}, // EXEC FAIL: "assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20101011-1.c: panic: runtime error: integer divide by zero"
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20141107-1.c`:                                 {}, // EXEC FAIL: "assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20141107-1.c: SIGILL: illegal instruction"
@@ -24,12 +25,14 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/bitfld-6.c`:                                   {}, // EXEC FAIL: "assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/bitfld-6.c: : FAIL: exit status 51 (.:0:: .:0:: asm_s390x.s:773:goexit: asm_s390x.s:773:goexit: all_test.go:437:1: all_test.go:584:testExec1:)"
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/bitfld-7.c`:                                   {}, // EXEC FAIL: "assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/bitfld-7.c: : FAIL: exit status 34 (.:0:: .:0:: asm_s390x.s:773:goexit: asm_s390x.s:773:goexit: all_test.go:437:1: all_test.go:584:testExec1:)"
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c`:                 {}, // EXEC FAIL: "assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c: : FAIL: signal: aborted (.:0:: .:0:: asm_s390x.s:773:goexit: asm_s390x.s:773:goexit: all_test.go:437:1: all_test.go:5..."
+	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr68841.c`:                                    {}, // EXEC FAIL
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/strct-stdarg-1.c`:                             {}, // EXEC FAIL: "assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/strct-stdarg-1.c: runtime: g 1: unexpected return pc for modernc.org/libc.newTLS called from 0x1"
 	`assets/github.com/AbsInt/CompCert/test/c/mandelbrot.c`:                                             {}, // EXEC FAIL: "assets/github.com/AbsInt/CompCert/test/c/mandelbrot.c: P4"
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20101011-1.c`:                 {}, // EXEC FAIL: "assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20101011-1.c: panic: runtime error: integer divide by zero"
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/bitfld-6.c`:                   {}, // EXEC FAIL: "assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/bitfld-6.c: : FAIL: exit status 51 (.:0:: .:0:: asm_s390x.s:773:goexit: asm_s390x.s:773:goexit: all_test.go:437:1: all_test.go:584:..."
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/bitfld-7.c`:                   {}, // EXEC FAIL: "assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/bitfld-7.c: : FAIL: exit status 34 (.:0:: .:0:: asm_s390x.s:773:goexit: asm_s390x.s:773:goexit: all_test.go:437:1: all_test.go:584:..."
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c`: {}, // EXEC FAIL: "assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c: : FAIL: signal: aborted (.:0:: .:0:: asm_s390x.s:773:goexit: asm_s390x.s:773:goexit: all_test.go:437:..."
+	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr78720.c`:                    {}, // EXEC FAIL
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/return-addr.c`:                {}, // EXEC FAIL
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/vrp-3.c`:                      {}, // EXEC FAIL: "assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/vrp-3.c: : FAIL: signal: segmentation fault (.:0:: .:0:: asm_s390x.s:773:goexit: asm_s390x.s:773:goexit: all_test.go:437:1: all_tes..."
 	`assets/github.com/vnmakarov/mir/c-benchmarks/except.c`:                                             {}, // EXEC FAIL: "assets/github.com/vnmakarov/mir/c-benchmarks/except.c: libc.go:2142:Xlongjmp: TODOTODO "
@@ -40,8 +43,12 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-packing.c`:                                   {}, // EXEC FAIL
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-trailing-zero.c`:                             {}, // EXEC FAIL
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-types-init.c`:                                {}, // EXEC FAIL
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/declaration-default-int.c`:                            {}, // EXEC FAIL
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/function-implicit-declare.c`:                          {}, // EXEC FAIL
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/long-double-load.c`:                                   {}, // EXEC FAIL
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/macro-paste.c`:                                        {}, // EXEC FAIL
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/union-bitfield.c`:                                     {}, // EXEC FAIL: "assets/github.com/vnmakarov/mir/c-tests/lacc/union-bitfield.c: : FAIL: exit status 1 (.:0:: .:0:: asm_s390x.s:773:goexit: asm_s390x.s:773:goexit: all_test.go:437:1: all_test.go:584:testExec1:)"
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/whitespace.c`:                                         {}, // EXEC FAIL
 	`assets/github.com/vnmakarov/mir/c-tests/new/setjmp.c`:                                              {}, // EXEC FAIL: "assets/github.com/vnmakarov/mir/c-tests/new/setjmp.c: libc.go:2142:Xlongjmp: TODOTODO "
 	`assets/github.com/vnmakarov/mir/c-tests/new/setjmp2.c`:                                             {}, // EXEC FAIL: "assets/github.com/vnmakarov/mir/c-tests/new/setjmp2.c: libc.go:2142:Xlongjmp: TODOTODO "
 

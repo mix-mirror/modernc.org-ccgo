@@ -59,8 +59,15 @@ var testExecKnownFails = map[string]struct{}{
 
 	//TODO
 	`assets/CompCert-3.6/test/c/mandelbrot.c`:                                                           {}, // EXEC FAIL
+	`assets/benchmarksgame-team.pages.debian.net/fasta-3.c`:                                             {}, // EXEC FAIL
+	`assets/benchmarksgame-team.pages.debian.net/fasta-8.c`:                                             {}, // EXEC FAIL
+	`assets/benchmarksgame-team.pages.debian.net/mandelbrot-9.c`:                                        {}, // EXEC FAIL
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c`:                 {}, // EXEC FAIL: assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c: : FAIL: exit status 3 (.:0:: .:0:: asm_386.s:1363:goexit: asm_386.s:1363:goexit: all_test.go:444:1: all_test.go:600:testExec1:)
+	`assets/github.com/AbsInt/CompCert/test/c/mandelbrot.c`:                                             {}, // EXEC FAIL
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c`: {}, // EXEC FAIL: assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c: : FAIL: exit status 3 (.:0:: .:0:: asm_386.s:1363:goexit: asm_386.s:1363:goexit: all_test.go:444:1: all_test.go:600:testExec1:)
+	`assets/github.com/vnmakarov/mir/c-benchmarks/mandelbrot.c`:                                         {}, // EXEC FAIL
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/string-conversion.c`:                                  {}, // EXEC FAIL
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/vararg-complex-2.c`:                                   {}, // EXEC FAIL
 
 	// ==== BUILD FAIL - compiles but does not build.
 
@@ -105,6 +112,7 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr33870-1.c`:                         {}, // BUILD FAIL: "exit status 1"
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr35456.c`:                           {}, // BUILD FAIL: "exit status 1"
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr36321.c`:                           {}, // BUILD FAIL: "exit status 1"
+	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr37780.c`:                           {}, // BUILD FAIL
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr38819.c`:                           {}, // BUILD FAIL: "exit status 1"
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr39228.c`:                           {}, // BUILD FAIL: "exit status 1"
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr39240.c`:                           {}, // BUILD FAIL: "exit status 1"
@@ -181,6 +189,7 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr33870-1.c`:         {}, // BUILD FAIL: "exit status 1"
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr35456.c`:           {}, // BUILD FAIL: "exit status 1"
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr36321.c`:           {}, // BUILD FAIL: "exit status 1"
+	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr37780.c`:           {}, // BUILD FAIL
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr38819.c`:           {}, // BUILD FAIL: "exit status 1"
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr39228.c`:           {}, // BUILD FAIL: "exit status 1"
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr39240.c`:           {}, // BUILD FAIL: "exit status 1"

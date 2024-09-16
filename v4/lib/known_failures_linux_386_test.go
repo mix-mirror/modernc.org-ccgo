@@ -7,24 +7,24 @@ package ccgo // import "modernc.org/ccgo/v4/lib"
 var testExecKnownFails = map[string]struct{}{
 	// EXEC FAIL - compiles and builds but fails when executed.
 
-	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20031003-1.c`:                                 {}, // EXEC FAIL: "assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20031003-1.c: : FAIL: signal: aborted (.:0:: .:0:: asm_386.s:1363:goexit: asm_386.s:1363:goexit: all_test.go:429:1: all_test.go:576:testExec1:)"
-	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20101011-1.c`:                                 {}, // EXEC FAIL: "assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20101011-1.c: panic: runtime error: integer divide by zero"
-	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/991014-1.c`:                                   {}, // EXEC FAIL: "assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/991014-1.c: runtime: out of memory: cannot allocate 2147483648-byte block (2151317504 in use)"
-	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c`:                 {}, // EXEC FAIL: "assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c: : FAIL: signal: aborted (.:0:: .:0:: asm_386.s:1363:goexit: asm_386.s:1363:goexit: all_test.go:429:1: all_test.go:576..."
-	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20031003-1.c`:                 {}, // EXEC FAIL: "assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20031003-1.c: : FAIL: signal: aborted (.:0:: .:0:: asm_386.s:1363:goexit: asm_386.s:1363:goexit: all_test.go:429:1: all_test.go:576..."
-	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20101011-1.c`:                 {}, // EXEC FAIL: "assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20101011-1.c: panic: runtime error: integer divide by zero"
-	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/991014-1.c`:                   {}, // EXEC FAIL: "assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/991014-1.c: runtime: out of memory: cannot allocate 1073741824-byte block (2151317504 in use)"
-	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c`: {}, // EXEC FAIL: "assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c: : FAIL: signal: aborted (.:0:: .:0:: asm_386.s:1363:goexit: asm_386.s:1363:goexit: all_test.go:429:1:..."
-	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/return-addr.c`:                {}, // EXEC FAIL
-	`assets/github.com/vnmakarov/mir/c-benchmarks/except.c`:                                             {}, // EXEC FAIL: "assets/github.com/vnmakarov/mir/c-benchmarks/except.c: libc.go:2142:Xlongjmp: TODOTODO "
-	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-basic.c`:                                     {}, // EXEC FAIL
-	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-trailing-zero.c`:                             {}, // EXEC FAIL
-	`assets/github.com/vnmakarov/mir/c-tests/lacc/float-arithmetic.c`:                                   {}, // EXEC FAIL
+	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20031003-1.c`:                                 {},
+	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20101011-1.c`:                                 {},
+	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/991014-1.c`:                                   {},
+	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c`:                 {},
+	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20031003-1.c`:                 {},
+	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20101011-1.c`:                 {},
+	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/991014-1.c`:                   {},
+	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c`: {},
+	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/return-addr.c`:                {},
+	`assets/github.com/vnmakarov/mir/c-benchmarks/except.c`:                                             {},
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-basic.c`:                                     {},
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-trailing-zero.c`:                             {},
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/float-arithmetic.c`:                                   {},
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/macro-paste.c`:                                        {},
-	`assets/github.com/vnmakarov/mir/c-tests/lacc/string-conversion.c`:                                  {}, // EXEC FAIL: "assets/github.com/vnmakarov/mir/c-tests/lacc/string-conversion.c: if"
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/string-conversion.c`:                                  {},
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/whitespace.c`:                                         {},
-	`assets/github.com/vnmakarov/mir/c-tests/new/setjmp.c`:                                              {}, // EXEC FAIL: "assets/github.com/vnmakarov/mir/c-tests/new/setjmp.c: libc.go:2142:Xlongjmp: TODOTODO "
-	`assets/github.com/vnmakarov/mir/c-tests/new/setjmp2.c`:                                             {}, // EXEC FAIL: "assets/github.com/vnmakarov/mir/c-tests/new/setjmp2.c: libc.go:2142:Xlongjmp: TODOTODO "
+	`assets/github.com/vnmakarov/mir/c-tests/new/setjmp.c`:                                              {},
+	`assets/github.com/vnmakarov/mir/c-tests/new/setjmp2.c`:                                             {},
 
 	// BUILD FAIL - compiles but does not build.
 

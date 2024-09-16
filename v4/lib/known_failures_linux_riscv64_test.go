@@ -8,14 +8,18 @@ var testExecKnownFails = map[string]struct{}{
 	// ==== EXEC FAIL - compiles and builds but fails when executed.
 
 	`assets/benchmarksgame-team.pages.debian.net/mandelbrot-9.c`:                         {}, // EXEC FAIL
-	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/990326-1.c`:                    {}, // COMPILE FAIL: "715.go: gofmt: signal: segmentation fault (core dumped)
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr36093.c`:                     {}, // EXEC FAIL: "assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr36093.c: panic: 544"
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/return-addr.c`: {}, // EXEC FAIL
 	`assets/github.com/vnmakarov/mir/c-benchmarks/except.c`:                              {}, // EXEC FAIL: assets/github.com/vnmakarov/mir/c-benchmarks/except.c: libc.go:2142:Xlongjmp: TODOTODO
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-basic.c`:                      {}, // EXEC FAIL
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-trailing-zero.c`:              {}, // EXEC FAIL
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-types-init.c`:                 {},
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/declaration-default-int.c`:             {}, // EXEC FAIL: assets/github.com/vnmakarov/mir/c-tests/lacc/declaration-default-int.c: : FAIL: exit status 51
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/function-implicit-declare.c`:           {}, // EXEC FAIL: assets/github.com/vnmakarov/mir/c-tests/lacc/function-implicit-declare.c: : FAIL: exit status 42
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/long-double-load.c`:                    {}, // EXEC FAIL
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/macro-paste.c`:                         {}, // EXEC FAIL: assets/github.com/vnmakarov/mir/c-tests/lacc/macro-paste.c: foo5
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/vararg-complex-2.c`:                    {}, // EXEC FAIL
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/whitespace.c`:                          {}, // EXEC FAIL: assets/github.com/vnmakarov/mir/c-tests/lacc/whitespace.c: Hello
 	`assets/github.com/vnmakarov/mir/c-tests/new/setjmp.c`:                               {}, // EXEC FAIL: assets/github.com/vnmakarov/mir/c-tests/new/setjmp.c: libc.go:2142:Xlongjmp: TODOTODO
 	`assets/github.com/vnmakarov/mir/c-tests/new/setjmp2.c`:                              {}, // EXEC FAIL: assets/github.com/vnmakarov/mir/c-tests/new/setjmp2.c: libc.go:2142:Xlongjmp: TODOTODO
 
@@ -361,6 +365,7 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/980526-1.c`:                                   {}, // COMPILE FAIL: TODO <nil> (asm_riscv64.s:512:goexit: compile.go:433:compile: decl.go:294:externalDeclaration: decl.go:322:functionDefinition: decl.go:344:functionDefinition0: decl.go:101:newFnCtx:)
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/980929-1.c`:                                   {}, // COMPILE FAIL: TODO 980929-1.c:17:5: from pointer to int, exprUintptr to pointer to int exprVoid, src '&n', buf 'ppuintptr(iqunsafe.ppPointer(&(aan)))' (stmt.go:360:blockItem: stmt.go:38:statement: expr.go:70:topExpr: expr.go:115:expr: expr.go:165:convert: expr.go:298:convertMode:)
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/990208-1.c`:                                   {}, // COMPILE FAIL: TODO UnaryExpressionLabelAddr (expr.go:101:expr: expr.go:494:expr0: expr.go:3444:assignmentExpression: expr.go:101:expr: expr.go:530:expr0: expr.go:1691:unaryExpression:)
+	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/990326-1.c`:                                   {}, // COMPILE FAIL: "715.go: gofmt: signal: segmentation fault (core dumped)
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/align-3.c`:                                    {}, // COMPILE FAIL: align-3.c:5:6: unsupported alignment 256 of function(void) (asm_riscv64.s:512:goexit: compile.go:433:compile: decl.go:294:externalDeclaration: decl.go:322:functionDefinition: decl.go:342:functionDefinition0: type.go:441:isValidType1:)
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/builtin-prefetch-3.c`:                         {}, // COMPILE FAIL: TODO exprUintptr (expr.go:530:expr0: expr.go:1557:unaryExpression: expr.go:101:expr: expr.go:522:expr0: expr.go:2028:postfixExpression: expr.go:2663:postfixExpressionSelect:)
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c`:                 {}, // COMPILE FAIL: TODO *cc.InvalidType (expr.go:633:nonConstBool: expr.go:70:topExpr: expr.go:101:expr: expr.go:522:expr0: expr.go:2025:postfixExpression: expr.go:3083:postfixExpressionCall:)

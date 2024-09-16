@@ -4,6 +4,12 @@
 
 package ccgo // import "modernc.org/ccgo/v4/lib"
 
+// flecs
+// 
+// echo -n > /tmp/ccgo.log
+// # ccgo flecs.c -ignore-unsupported-alignment -U__SIZEOF_INT128__ -ignore-link-errors -positions -U__GNUC__
+// ccgo flecs.c -ignore-unsupported-alignment -U__SIZEOF_INT128__ -ignore-link-errors -positions
+
 import (
 	"bytes"
 	"encoding/json"
@@ -387,6 +393,14 @@ func (t *Task) getPkgSymbols(importPath string) (r *object, err error) {
 					}
 				}
 			}
+		}
+	}
+	if r.pkgName == "libc" {
+		for _, v := range []string{
+			"X__sync_add_and_fetch",
+			"X__sync_sub_and_fetch",
+		} {
+			r.externs.add(v)
 		}
 	}
 	return r, nil
@@ -1802,6 +1816,7 @@ type TLS struct{
 func Start(func(*TLS, int32, uintptr) int32)
 
 func VaList(p uintptr, args ...interface{}) uintptr
+
 
 `)
 	taken.add("TLS")

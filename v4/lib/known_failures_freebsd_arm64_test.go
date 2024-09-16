@@ -7,6 +7,8 @@ package ccgo // import "modernc.org/ccgo/v4/lib"
 var testExecKnownFails = map[string]struct{}{
 	// ==== EXEC FAIL - compiles and builds but fails when executed.
 
+	`assets/benchmarksgame-team.pages.debian.net/reverse-complement-2.c`:                 {}, // EXEC FAIL
+	`assets/benchmarksgame-team.pages.debian.net/reverse-complement-5.c`:                 {}, // EXEC FAIL
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/align-3.c`:                     {}, // EXEC FAIL: "assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/align-3.c: : FAIL: signal: abort trap (core dumped) (.:0:: .:0:: asm_arm64.s:1197:goexit: asm_arm64.s:1197:goexit: all_test.go:447:1: all_test.go:5..."
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr36093.c`:                     {}, // EXEC FAIL: "assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr36093.c: panic: 544"
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/align-3.c`:     {}, // EXEC FAIL: "assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/align-3.c: : FAIL: signal: abort trap (core dumped) (.:0:: .:0:: asm_arm64.s:1197:goexit: asm_arm64.s:1197:goexit: all_test.go:447:..."

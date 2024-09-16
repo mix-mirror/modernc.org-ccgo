@@ -98,7 +98,7 @@ func (c *ctx) initializer(w writer, n cc.Node, a []*cc.Initializer, t cc.Type, o
 
 		return c.initializerArray(w, n, a, x, off0)
 	case *cc.StructType:
-		if len(a) == 1 && a[0].Type().Kind() == cc.Struct {
+		if len(a) == 1 && a[0].Type().Kind() == cc.Struct && t.Size() == a[0].Type().Size() {
 			return c.expr(w, a[0].AssignmentExpression, t, exprDefault)
 		}
 

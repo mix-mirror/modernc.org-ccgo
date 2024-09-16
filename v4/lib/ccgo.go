@@ -501,7 +501,7 @@ func (t *Task) main() (err error) {
 		t.cfgArgs = append(t.cfgArgs, ldflag)
 	}
 
-	if /* t.goos == "windows" && */ (t.goarch == "386" || t.goarch == "amd64") {
+	if t.goos == "windows" && (t.goarch == "386" || t.goarch == "amd64") {
 		t.cfgArgs = append(t.cfgArgs,
 			"-mno-3dnow",
 			"-mno-abm",
