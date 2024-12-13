@@ -132,6 +132,7 @@ type Task struct {
 	m32                          bool // -m32
 	m64                          bool // -m64
 	noBuiltin                    bool // -fno-builtin
+	noMainMinimize               bool // -no-main-minimize
 	noObjFmt                     bool // -no-object-file-format
 	nostdinc                     bool // -nostdinc
 	nostdlib                     bool // -nostdlib
@@ -345,6 +346,7 @@ func (t *Task) main() (err error) {
 	set.Opt("m32", func(arg string) error { t.m32 = true; return nil })
 	set.Opt("m64", func(arg string) error { t.m64 = true; return nil })
 	set.Opt("mlong-double-64", func(arg string) error { t.cfgArgs = append(t.cfgArgs, arg); return nil })
+	set.Opt("no-main-minimize", func(arg string) error { t.noMainMinimize = true; return nil })
 	set.Opt("no-object-file-format", func(arg string) error { t.noObjFmt = true; return nil })
 	set.Opt("nostdinc", func(arg string) error { t.nostdinc = true; t.cfgArgs = append(t.cfgArgs, arg); return nil })
 	set.Opt("nostdlib", func(arg string) error { t.nostdlib = true; return nil })

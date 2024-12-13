@@ -4,12 +4,6 @@
 
 package ccgo // import "modernc.org/ccgo/v4/lib"
 
-// flecs
-// 
-// echo -n > /tmp/ccgo.log
-// # ccgo flecs.c -ignore-unsupported-alignment -U__SIZEOF_INT128__ -ignore-link-errors -positions -U__GNUC__
-// ccgo flecs.c -ignore-unsupported-alignment -U__SIZEOF_INT128__ -ignore-link-errors -positions
-
 import (
 	"bytes"
 	"encoding/json"
@@ -897,6 +891,7 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 	nm := l.task.packageName
 	if nm == "" {
 		nm = "main"
+		l.task.packageName = nm
 	}
 	l.prologue(nm)
 	if !l.task.header {
@@ -907,7 +902,6 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 		default:
 			l.w("\n\t%s \"reflect\"", nm)
 		}
-		rtDummy := ""
 		switch nm := l.unsafeName; nm {
 		case "unsafe":
 			l.w("\n\t\"unsafe\"")
@@ -938,12 +932,10 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 		l.w("\n)")
 		l.w(`
 
-var (
-	_ %s.Type
-	_ %s.Pointer
-%s)
+var _ %s.Type
+var _ %s.Pointer
 
-`, l.reflectName, l.unsafeName, rtDummy)
+`, l.reflectName, l.unsafeName)
 	}
 
 	for _, linkFile := range linkFiles {
@@ -1239,6 +1231,9 @@ func (l *linker) postProcess(fn string, b []byte) (r []byte) {
 		}
 	})
 
+	if !l.task.noMainMinimize && l.task.packageName == "main" {
+		l.minimizeMain(src, pkg)
+	}
 	return src.Source(true)
 }
 
@@ -1300,6 +1295,153 @@ func (l *linker) walk(v any, fn func(any)) {
 			}
 		}
 	}
+}
+
+func nodeName(n gc.Node) string {
+	switch x := n.(type) {
+	case *gc.FunctionDecl:
+		return x.FunctionName.Src()
+	case *gc.AliasDecl:
+		return x.Ident.Src()
+	case *gc.Variable:
+		return x.Ident.Src()
+	case *gc.Constant:
+		return x.Ident.Src()
+	case *gc.VarDecl:
+		for _, v := range x.VarSpecs {
+			for _, w := range v.IdentifierList {
+				return w.Ident.Src()
+			}
+
+			panic(todo("internal error: %v: %T", n.Position(), n))
+		}
+	case *gc.ConstDecl:
+		for _, v := range x.ConstSpecs {
+			for _, w := range v.IdentifierList {
+				return w.Ident.Src()
+			}
+
+			panic(todo("internal error: %v: %T", n.Position(), n))
+		}
+	case *gc.TypeDecl:
+		for _, v := range x.TypeSpecs {
+			switch y := v.(type) {
+			case *gc.AliasDecl:
+				return y.Ident.Src()
+			}
+
+			panic(todo("internal error: %v: %T", n.Position(), n))
+		}
+	}
+
+	panic(todo("internal error: %v: %T", n.Position(), n))
+}
+
+func (l *linker) minimizeMain(src *gc.SourceFile, pkg *gc.Package) {
+	tlds := map[gc.Node]struct{}{}
+	for _, v := range src.TopLevelDecls {
+		tlds[v] = struct{}{}
+	}
+	for _, v := range pkg.Scope.Nodes {
+		tlds[v.Node] = struct{}{}
+	}
+	var roots []gc.Node
+	for _, v := range pkg.SourceFiles[0].TopLevelDecls {
+		switch x := v.(type) {
+		case *gc.FunctionDecl:
+			switch x.FunctionName.Src() {
+			case "init", "main":
+				roots = append(roots, x)
+			}
+		}
+	}
+	need := map[string]struct{}{}
+	for ; len(roots) != 0; roots = roots[1:] {
+		root := roots[0]
+		nm := nodeName(root)
+		if _, ok := need[nm]; ok {
+			continue
+		}
+
+		need[nm] = struct{}{}
+		l.walk(root, func(v any) {
+			switch x := v.(type) {
+			case reflect.Value:
+				if x == zeroReflectValue || x.IsZero() {
+					return
+				}
+
+				switch y := x.Interface().(type) {
+				case *gc.Ident:
+					switch z := y.ResolvedTo().(type) {
+					case nil, gc.PredefinedType:
+						// ok
+					case *gc.FunctionDecl:
+						if _, ok := tlds[z]; ok {
+							roots = append(roots, z)
+						}
+					case *gc.Variable:
+						if sc := z.LexicalScope(); sc != nil && sc == pkg.Scope {
+							roots = append(roots, z)
+						}
+					case *gc.Constant:
+						if _, ok := tlds[z]; ok {
+							roots = append(roots, z)
+						}
+					case *gc.AliasDecl:
+						trc("1392: %v: %q", y.Position(), y.Source(false))
+					default:
+						trc("1394: %v: %T", y.Position(), z)
+					}
+				case *gc.TypeNameNode:
+					switch z := y.Name.ResolvedTo().(type) {
+					case nil, gc.PredefinedType:
+						// ok
+					case *gc.AliasDecl:
+						if sc := z.LexicalScope(); sc != nil && sc == pkg.Scope {
+							roots = append(roots, z)
+						}
+					default:
+						trc("1405: %v: %q", z.Position(), y.Name.Source(false))
+					}
+				case *gc.QualifiedIdent:
+					trc("QI %q %T", y.Source(false), y.ResolvedTo())
+					// switch z := y.ResolvedTo().(type) {
+					// case nil, gc.PredefinedType:
+					// 	// ok
+					// // case *gc.FunctionDecl:
+					// // 	if _, ok := tlds[z]; ok {
+					// // 		roots = append(roots, z)
+					// // 	}
+					// // case *gc.Variable:
+					// // 	if sc := z.LexicalScope(); sc != nil && sc == pkg.Scope {
+					// // 		roots = append(roots, z)
+					// // 	}
+					// // case *gc.Constant:
+					// // 	if _, ok := tlds[z]; ok {
+					// // 		roots = append(roots, z)
+					// // 	}
+					// // case *gc.AliasDecl:
+					// // 	trc("1424: %v: %q", y.Position(), y.Source(false))
+					// default:
+					// 	trc("1426: %v: %q %T", y.Position(), y.Source(false), z)
+					// }
+				default:
+					// trc("1429: %T", y)
+				}
+			}
+		})
+	}
+	return
+	w := 0
+	for _, v := range src.TopLevelDecls {
+		nm := nodeName(v)
+		if _, ok := need[nm]; ok {
+			src.TopLevelDecls[w] = v
+			w++
+		}
+	}
+	src.TopLevelDecls = src.TopLevelDecls[:w]
 }
 
 var _ gc.PackageChecker = &checker{}
@@ -1816,7 +1958,6 @@ type TLS struct{
 func Start(func(*TLS, int32, uintptr) int32)
 
 func VaList(p uintptr, args ...interface{}) uintptr
-
 
 `)
 	taken.add("TLS")

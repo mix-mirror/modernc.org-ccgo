@@ -460,6 +460,7 @@ func (t *Task) cc(execCC, hostCC string, cflags []string) error {
 	set.Arg("o", true, func(arg, val string) error { args.add(arg, val+".go"); return nil })
 	set.Arg("sectcreate", false, func(arg, val string) error { ignore = 2; return nil })
 	set.Arg("std", true, func(arg, val string) error { args.add(fmt.Sprintf("%s=%s", arg, val)); return nil })
+	set.Opt("no-main-minimize", func(arg string) error { return nil })
 	set.Opt("-version", func(arg string) error { args.add(arg); return nil })
 	set.Opt("E", func(arg string) error { optE = true; return nil })
 	set.Opt("MMD", func(arg string) error { return nil })
