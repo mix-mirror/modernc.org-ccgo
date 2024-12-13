@@ -108,7 +108,7 @@ func (c *ctx) expr(w writer, n cc.ExpressionNode, to cc.Type, toMode mode) (ret 
 
 	if from == nil || fromMode == 0 {
 		// trc("IN %v: from %v, %v to %v %v, src '%s', buf '%s'", c.pos(n), from, fromMode, to, toMode, cc.NodeSource(n), r.bytes())
-		c.err(errorf("TODO %T %v %v -> %v %v", n, from, fromMode, to, toMode))
+		c.err2(n, errorf("TODO %T %v %v -> %v %v", n, from, fromMode, to, toMode))
 		return r
 	}
 
@@ -347,6 +347,8 @@ func (c *ctx) convertType(n cc.ExpressionNode, s *buf, from, to cc.Type, fromMod
 			//TODO
 		default:
 			switch {
+			case cc.IsIntegerType(from) && cc.IsIntegerType(to) && (cc.IsSignedInteger(from) != cc.IsSignedInteger(to)):
+				b.w("(%s%s%sFrom%s(%s))", c.task.tlsQualifier, tag(preserve), c.helper(n, to), c.helper(n, from), s)
 			case !cc.IsComplexType(from) && !cc.IsComplexType(to):
 				b.w("(%s(%s))", c.verifyTyp(n, to), s)
 			default:
@@ -774,18 +776,22 @@ func (c *ctx) logicalOrExpression(w writer, n *cc.LogicalOrExpression, t cc.Type
 }
 
 func (c *ctx) unparen(n cc.ExpressionNode) cc.ExpressionNode {
-	switch x := n.(type) {
-	case *cc.ExpressionList:
-		if x.ExpressionList == nil {
-			return c.unparen(x.AssignmentExpression)
+	for {
+		switch x := n.(type) {
+		case *cc.ExpressionList:
+			if x.ExpressionList == nil {
+				n = x.AssignmentExpression
+				continue
+			}
+		case *cc.PrimaryExpression:
+			if x.Case == cc.PrimaryExpressionExpr {
+				n = x.ExpressionList
+				continue
+			}
 		}
-	case *cc.PrimaryExpression:
-		if x.Case == cc.PrimaryExpressionExpr {
-			return c.unparen(x.ExpressionList)
-		}
-	}
 
-	return n
+		return n
+	}
 }
 
 func (c *ctx) isIntLit(n cc.ExpressionNode) (bool, interface{}) {
@@ -2004,7 +2010,6 @@ out:
 
 		c.err(errorf("TODO %v", n.Case))
 	case cc.PostfixExpressionCall: // PostfixExpression '(' ArgumentExpressionList ')'
-		//TODO __builtin_object_size 28_strings.c on darwin/amd64
 		switch c.declaratorOf(n.PostfixExpression).Name() {
 		case
 			"__builtin_constant_p",
@@ -2067,6 +2072,9 @@ out:
 				c.err(errorf("internal error"))
 			}
 			return &b, n.Type(), mode
+		case "__builtin_object_size": // 28_strings.c on darwin/amd64
+			// size_t __builtin_object_size (void *ptr, int type);
+			return c.objectSize(w, n, t, mode)
 		case "longjmp":
 			jb := c.expr(w, n.ArgumentExpressionList.AssignmentExpression, c.pvoid, exprDefault)
 			val := c.expr(w, n.ArgumentExpressionList.ArgumentExpressionList.AssignmentExpression, c.ast.Int, exprDefault)
@@ -2092,7 +2100,7 @@ out:
 			return c.stdatomicExchange(w, n, t, mode)
 		case "__atomic_compare_exchange":
 			// bool __atomic_compare_exchange (type *ptr, type *expected, type *desired, bool weak, int success_memorder, int failure_memorder)
-			return c.stdatomicCompareExchange(w, n, t, mode)
+			return c.stdatomicCompareExchange(w, n, c.ast.Int, mode)
 		}
 
 		switch mode {
@@ -2351,6 +2359,90 @@ func (c *ctx) sameSignednessIntegers(n ...cc.Type) bool {
 		}
 	}
 	return true
+}
+
+func (c *ctx) objectSize(w writer, n *cc.PostfixExpression, t cc.Type, mode mode) (r *buf, rt cc.Type, rmode mode) {
+	// Built-in Function: size_t __builtin_object_size (const void * ptr, int type)
+	//
+	// is a built-in construct that returns a constant number of bytes from ptr to
+	// the end of the object ptr pointer points to (if known at compile time). To
+	// determine the sizes of dynamically allocated objects the function relies on
+	// the allocation functions called to obtain the storage to be declared with
+	// the alloc_size attribute (see Common Function Attributes).
+	// __builtin_object_size never evaluates its arguments for side effects. If
+	// there are any side effects in them, it returns (size_t) -1 for type 0 or 1
+	// and (size_t) 0 for type 2 or 3. If there are multiple objects ptr can point
+	// to and all of them are known at compile time, the returned number is the
+	// maximum of remaining byte counts in those objects if type & 2 is 0 and
+	// minimum if nonzero. If it is not possible to determine which objects ptr
+	// points to at compile time, __builtin_object_size should return (size_t) -1
+	// for type 0 or 1 and (size_t) 0 for type 2 or 3.
+	//
+	// type is an integer constant from 0 to 3. If the least significant bit is
+	// clear, objects are whole variables, if it is set, a closest surrounding
+	// subobject is considered the object a pointer points to. The second bit
+	// determines if maximum or minimum of remaining bytes is computed.
+	//
+	//	struct V { char buf1[10]; int b; char buf2[10]; } var;
+	//	char *p = &var.buf1[1], *q = &var.b;
+	//
+	//	/* Here the object p points to is var.  */
+	//	assert (__builtin_object_size (p, 0) == sizeof (var) - 1);
+	//	/* The subobject p points to is var.buf1.  */
+	//	assert (__builtin_object_size (p, 1) == sizeof (var.buf1) - 1);
+	//	/* The object q points to is var.  */
+	//	assert (__builtin_object_size (q, 0)
+	//	        == (char *) (&var + 1) - (char *) &var.b);
+	//	/* The subobject q points to is var.b.  */
+	//	assert (__builtin_object_size (q, 1) == sizeof (var.b));
+	var b buf
+	args := argumentExpressionList(n.ArgumentExpressionList)
+	if len(args) != 2 {
+		c.err(errorf("%v: invalid number of arguments to __builtin_object_size", n.ArgumentExpressionList.Position()))
+		return &b, t, mode
+	}
+
+	switch {
+	case args[0].Type().Kind() == cc.Ptr, cc.IsIntegerType(args[0].Type()):
+		// ok
+	default:
+		c.err(errorf("%v: invalid type of first argument to __builtin_object_size: %s type %s", n.ArgumentExpressionList.Position(), cc.NodeSource(args[0]), args[0].Type()))
+		return &b, t, mode
+	}
+
+	switch {
+	case cc.IsIntegerType(args[1].Type()):
+		// ok
+	default:
+		c.err(errorf("%v: invalid type of second argument to __builtin_object_size: %s type %s", n.ArgumentExpressionList.Position(), cc.NodeSource(args[1]), args[1].Type()))
+		return &b, t, mode
+	}
+
+	k := 0
+	switch x := args[1].Value().(type) {
+	case cc.Int64Value:
+		if x < 0 || x > 3 {
+			c.err(errorf("%v: invalid second argument to __builtin_object_size: %v", n.ArgumentExpressionList.Position(), cc.NodeSource(args[1])))
+			return &b, t, mode
+		}
+
+		k = int(x)
+	case cc.UInt64Value:
+		if x > 3 {
+			c.err(errorf("%v: invalid second argument to __builtin_object_size: %v", n.ArgumentExpressionList.Position(), cc.NodeSource(args[1])))
+			return &b, t, mode
+		}
+
+		k = int(x)
+	}
+
+	switch k {
+	case 0, 1:
+		b.w("(^%s__predefined_size_t(0))", tag(preserve))
+	default:
+		b.w("(0)")
+	}
+	return &b, c.ast.SizeT, exprDefault
 }
 
 func (c *ctx) addOverflow(w writer, n *cc.PostfixExpression, t cc.Type, mode mode) (r *buf, rt cc.Type, rmode mode) {
@@ -2665,7 +2757,7 @@ func (c *ctx) stdatomicCompareExchange(w writer, n *cc.PostfixExpression, t cc.T
 	default:
 		c.err(errorf("%v: invalid first argument to atomic operation: pointer to %s", n.ArgumentExpressionList.Position(), et))
 	}
-	return &b, et, mode
+	return &b, c.ast.Int, mode
 }
 
 func (c *ctx) uintFromSize(sz int64) cc.Type {
@@ -2712,7 +2804,7 @@ func (c *ctx) bitField(w writer, n cc.Node, p *buf, f *cc.Field, mode mode, atom
 		rt, rmode = rt.Pointer(), mode
 		b.w("(uintptr)(%sunsafe.%sPointer(%s +%d))", tag(importQualifier), tag(preserve), p, f.Offset())
 	default:
-		c.err(errorf("TODO %v", mode))
+		c.err2(n, errorf("TODO %v", mode))
 	}
 	return &b, rt, rmode
 }
@@ -3351,9 +3443,12 @@ func (c *ctx) postfixExpressionCall(w writer, n *cc.PostfixExpression, mode mode
 	var ft *cc.FunctionType
 	var d *cc.Declarator
 	var inlineFD *cc.FunctionDefinition
+	var syncOpAndFetch bool
 	switch d = c.declaratorOf(n.PostfixExpression); {
 	case d != nil:
 		switch d.Name() {
+		case "__sync_add_and_fetch", "__sync_sub_and_fetch":
+			syncOpAndFetch = true
 		case "alloca", "__builtin_alloca":
 			if d.Linkage() == cc.External {
 				c.f.callsAlloca = true
@@ -3474,6 +3569,16 @@ func (c *ctx) postfixExpressionCall(w writer, n *cc.PostfixExpression, mode mode
 			if d := c.declaratorOf(v); d != nil && d.IsFuncDef() {
 				mode = exprUintptr
 			}
+		}
+		switch {
+		case i == 1 && syncOpAndFetch: // __sync_add_and_fetch(type *ptr, type value)
+			pt, ok := args[0].Type().(*cc.PointerType)
+			if !ok {
+				c.err(errorf("%v: first argument of %s must be a pointer: %s", c.pos(n.PostfixExpression), d.Name(), params[0]))
+				break
+			}
+
+			t = pt.Elem()
 		}
 		var xarg *buf
 		switch {
@@ -3690,7 +3795,7 @@ func (c *ctx) assignmentExpression(w writer, n *cc.AssignmentExpression, t cc.Ty
 			}
 		}
 
-		switch x := n.UnaryExpression.(type) {
+		switch x := c.unparen(n.UnaryExpression).(type) {
 		case *cc.PostfixExpression:
 			switch x.Case {
 			case cc.PostfixExpressionSelect:
@@ -4077,7 +4182,7 @@ out:
 								break
 							}
 
-							b.w("(%s(%s))", c.verifyTyp(n, t), linkName)
+							b.w("(%s)", linkName)
 						default:
 							if isVolatileOrAtomicExpr {
 								rt = x.Type()

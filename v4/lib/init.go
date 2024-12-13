@@ -69,7 +69,7 @@ func (c *ctx) initializer(w writer, n cc.Node, a []*cc.Initializer, t cc.Type, o
 				r = c.topExpr(w, in.AssignmentExpression, t, exprDefault)
 				switch {
 				case c.initPatch != nil:
-					nm := fmt.Sprintf("%s__ccgo_init_%d", tag(preserve), c.id())
+					nm := fmt.Sprintf("%s__ccgo_init_%d", tag(staticInternal), c.id())
 					w.w("\nvar %s = %s;\n\n", nm, r)
 					var b buf
 					b.w("%suintptr(%s)", tag(preserve), unsafeAddr(nm))

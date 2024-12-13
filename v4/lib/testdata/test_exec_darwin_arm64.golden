@@ -8,6 +8,7 @@ assets/ccgo/bug/atomic.c
 assets/ccgo/bug/bitfield.c
 assets/ccgo/bug/complit.c
 assets/ccgo/bug/condfn.c
+assets/ccgo/bug/conv.c
 assets/ccgo/bug/cpl_convert.c
 assets/ccgo/bug/csmith.c
 assets/ccgo/bug/csmith2.c
@@ -1297,6 +1298,7 @@ assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr48335-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr48381.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr48517.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr48596.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr48641.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr48734.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr48742.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr48767.c
@@ -1974,6 +1976,7 @@ assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20070212-2.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20070212-3.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20070424-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20070517-1.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20070614-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20070623-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20070724-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20070824-1.c
@@ -2079,6 +2082,7 @@ assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920721-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920721-2.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920721-3.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920726-1.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920728-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920730-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920731-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920812-1.c
@@ -2183,6 +2187,7 @@ assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/941031-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/941101-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/941110-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/941202-1.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/950221-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/950322-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/950426-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/950426-2.c
@@ -2406,6 +2411,7 @@ assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/ieee/minuszero.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/ieee/mul-subnormal-single-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/ieee/mzero2.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/ieee/mzero3.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/ieee/mzero4.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/ieee/mzero5.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/ieee/mzero6.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/ieee/pr28634.c
@@ -3353,6 +3359,7 @@ assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20070212-2.
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20070212-3.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20070424-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20070517-1.c
+assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20070614-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20070623-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20070724-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20070824-1.c
@@ -3461,6 +3468,7 @@ assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/920721-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/920721-2.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/920721-3.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/920726-1.c
+assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/920728-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/920730-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/920731-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/920812-1.c
@@ -3565,6 +3573,7 @@ assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/941031-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/941101-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/941110-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/941202-1.c
+assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/950221-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/950322-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/950426-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/950426-2.c
@@ -3793,6 +3802,7 @@ assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/ieee/minusz
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/ieee/mul-subnormal-single-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/ieee/mzero2.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/ieee/mzero3.c
+assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/ieee/mzero4.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/ieee/mzero5.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/ieee/mzero6.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/ieee/pr28634.c
@@ -4256,6 +4266,7 @@ assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr91597.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr91632.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr92140.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr93402.c
+assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr93434.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr93582.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr93744-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr93744-2.c
@@ -4387,6 +4398,8 @@ assets/github.com/vnmakarov/mir/c-tests/andrewchambers_c/0006-while1.c
 assets/github.com/vnmakarov/mir/c-tests/andrewchambers_c/0007-dowhile1.c
 assets/github.com/vnmakarov/mir/c-tests/andrewchambers_c/0008-for1.c
 assets/github.com/vnmakarov/mir/c-tests/andrewchambers_c/0009-breakcont1.c
+assets/github.com/vnmakarov/mir/c-tests/andrewchambers_c/0010-goto1.c
+assets/github.com/vnmakarov/mir/c-tests/andrewchambers_c/0011-switch1.c
 assets/github.com/vnmakarov/mir/c-tests/andrewchambers_c/0012-pointers1.c
 assets/github.com/vnmakarov/mir/c-tests/andrewchambers_c/0012-pointers2.c
 assets/github.com/vnmakarov/mir/c-tests/andrewchambers_c/0013-struct1.c
@@ -4492,6 +4505,7 @@ assets/github.com/vnmakarov/mir/c-tests/lacc/declarator-parens.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/declare-auto-func.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/deref-address-offset.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/deref-array.c
+assets/github.com/vnmakarov/mir/c-tests/lacc/deref-compare-float.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/deref-deep.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/deref-store.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/deref.c
@@ -4508,6 +4522,7 @@ assets/github.com/vnmakarov/mir/c-tests/lacc/fact.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/field-chain-assign.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/float-arithmetic.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/float-branch.c
+assets/github.com/vnmakarov/mir/c-tests/lacc/float-compare-equal.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/float-compare-nan.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/float-compare.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/float-function.c
@@ -4519,6 +4534,7 @@ assets/github.com/vnmakarov/mir/c-tests/lacc/function-char-args.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/function-pointer-call.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/function-pointer.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/function.c
+assets/github.com/vnmakarov/mir/c-tests/lacc/goto.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/hello.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/immediate-branch.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/immediate-expr.c

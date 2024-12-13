@@ -386,9 +386,9 @@ func (t *Task) getPkgSymbols(importPath string) (r *object, err error) {
 							continue
 						}
 
-						// 						if dmesgs {
-						// 							dmesg("imported var %q", nm)
-						// 						}
+						// if dmesgs {
+						// 	dmesg("imported var %q", nm)
+						// }
 						r.externs.add(nm)
 					}
 				}

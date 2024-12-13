@@ -121,9 +121,10 @@ func (s *strSlice) add(v ...string) { *s = append(*s, v...) }
 
 func (t *Task) execed(routes string, cflags []string) (err error) {
 	if dmesgs {
+		wd, _ := os.Getwd()
 		dmesg(
-			"==== task.execed t.goos=%s t.goarch=%s IsExecEnv()=%v CC=%s routes=%s\nt.args=%s",
-			t.goos, t.goarch, IsExecEnv(), os.Getenv("CC"), routes, t.args,
+			"==== task.execed t.goos=%s t.goarch=%s IsExecEnv()=%v CC=%s routes=%s\nt.args=%s wd=%s",
+			t.goos, t.goarch, IsExecEnv(), os.Getenv("CC"), routes, t.args, wd,
 		)
 	}
 

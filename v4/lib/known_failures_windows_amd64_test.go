@@ -37,6 +37,7 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/941014-2.c`:                                   {}, // EXEC FAIL
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c`:                 {},
 	`assets/github.com/AbsInt/CompCert/test/c/mandelbrot.c`:                                             {}, // EXEC FAIL
+	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/941014-2.c`:                   {}, // EXEC FAIL
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c`: {},
 	`assets/github.com/vnmakarov/mir/c-benchmarks/mandelbrot.c`:                                         {}, // EXEC FAIL
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/convert-unsigned-float.c`:                             {}, // EXEC FAIL
@@ -209,6 +210,7 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/941202-1.c`:          {}, // BUILD FAIL: "exit status 1"
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/960405-1.c`:          {}, // BUILD FAIL: "exit status 1"
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/991014-1.c`:          {}, // BUILD FAIL: "exit status 1"
+	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/991112-1.c`:          {}, // BUILD FAIL
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/align-nest.c`:        {}, // BUILD FAIL: "exit status 1"
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/alloca-1.c`:          {}, // BUILD FAIL: "exit status 1"
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/built-in-setjmp.c`:   {}, // BUILD FAIL: "exit status 1"
@@ -588,6 +590,8 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20010209-1.c`:         {}, // COMPILE FAIL: "\"20010209-1.c:6:7: nested functions not supported (compile.go:460:compile: decl.go:295:externalDeclaration: decl.go:361:functionDefinition: decl.go:457:functionDefinition0: stmt.go:330:compoundStateme..."
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20010605-1.c`:         {}, // COMPILE FAIL: "\"20010605-1.c:5:14: nested functions not supported (compile.go:460:compile: decl.go:295:externalDeclaration: decl.go:361:functionDefinition: decl.go:457:functionDefinition0: stmt.go:330:compoundStatem..."
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20010605-2.c`:         {}, // COMPILE FAIL: "\"TODO UnaryExpressionReal (expr.go:101:expr: expr.go:529:expr0: expr.go:3803:assignmentExpression: expr.go:101:expr: expr.go:565:expr0: expr.go:1759:unaryExpression:)\""
+	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20010904-1.c`:         {}, // COMPILE FAIL
+	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20010904-2.c`:         {}, // COMPILE FAIL
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20020411-1.c`:         {}, // COMPILE FAIL: "\"TODO UnaryExpressionReal (expr.go:101:expr: expr.go:529:expr0: expr.go:3803:assignmentExpression: expr.go:101:expr: expr.go:565:expr0: expr.go:1759:unaryExpression:)\""
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20020412-1.c`:         {}, // COMPILE FAIL: "\"20020412-1.c:31:7: invalid type size: -1 (expr.go:4209:primaryExpression: expr.go:565:expr0: expr.go:1628:unaryExpression: type.go:42:typ: type.go:65:typ0: type.go:478:isValidType1:)\""
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20030330-1.c`:         {}, // COMPILE FAIL: "20030330-1.o.go:327:4: undefined: \"link_error\" external (all_test.go:444:1: all_test.go:538:testExec1: ccgo.go:197:Main: ccgo.go:659:main: link.go:302:link: link.go:862:link:) (all_test.go:444:1: all_..."
@@ -658,6 +662,7 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr22061-4.c`:          {}, // COMPILE FAIL: "\"pr22061-4.c:5:8: nested functions not supported (compile.go:460:compile: decl.go:295:externalDeclaration: decl.go:361:functionDefinition: decl.go:457:functionDefinition0: stmt.go:330:compoundStatemen..."
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr23135.c`:            {}, // COMPILE FAIL: "\"pr23135.c:19:14: unsupported vector type: vecint (expr.go:559:expr0: expr.go:4190:primaryExpression: expr.go:4626:primaryExpressionIntConst: type.go:60:verifyTyp: type.go:65:typ0: type.go:440:isValid..."
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr23324.c`:            {}, // COMPILE FAIL: "\"TODO (decl.go:1210:initDeclaratorInit: type.go:642:defineType: type.go:656:defineType0: type.go:578:defineUnionType: type.go:488:unionLiteral: type.go:315:typ0:)\""
+	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr23467.c`:            {}, // COMPILE FAIL
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr24135.c`:            {}, // COMPILE FAIL: "\"pr24135.c:7:3: label declarations not supported (compile.go:460:compile: decl.go:295:externalDeclaration: decl.go:361:functionDefinition: decl.go:401:functionDefinition0: stmt.go:330:compoundStatemen..."
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr34154.c`:            {}, // COMPILE FAIL: "\"TODO SelectionStatementSwitch (decl.go:401:functionDefinition0: stmt.go:330:compoundStatement: stmt.go:366:blockItem: stmt.go:42:statement: stmt.go:454:selectionStatement: stmt.go:671:selectionStatem..."
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr38151.c`:            {}, // COMPILE FAIL: "\"TODO *cc.PredefinedType _Complex int _Complex int (decl.go:297:externalDeclaration: decl.go:943:declaration: type.go:559:defineStructType: type.go:494:structLiteral: type.go:263:typ0: type.go:159:typ..."

@@ -66,6 +66,7 @@ var (
 	goarch      = runtime.GOARCH
 	goos        = runtime.GOOS
 	hostCC      string
+	libcVersion string                                   // from ../go.mod, eg. @v1.61.2
 	nogcc       = goos == "windows" && goarch == "arm64" // We have no 32b mingw-gcc binary targeting windows/amd64 bit yet.
 	re          *regexp.Regexp
 	target      = fmt.Sprintf("%s/%s", goos, goarch)
@@ -129,7 +130,26 @@ func TestMain(m *testing.M) {
 	}
 
 	hostCC = cfg.CC
+	libcVersion = getLatest()
 	os.Exit(m.Run())
+}
+
+func getLatest() string {
+	b, err := os.ReadFile(filepath.Join("..", "go.mod"))
+	if err != nil {
+		panic(err)
+	}
+
+	a := strings.Split(string(b), "\n")
+	for _, v := range a {
+		v = strings.TrimSpace(v)
+		if strings.HasPrefix(v, "modernc.org/libc") {
+			a := strings.Fields(v)
+			return "@" + a[1]
+		}
+	}
+
+	panic(todo("internal error"))
 }
 
 func (p *parallel) close(t *testing.T) {
@@ -336,7 +356,7 @@ func TestExec(t *testing.T) {
 			return fmt.Errorf("%s\vFAIL: %v", out, err)
 		}
 
-		if out, err := shell(true, "go", "get", *oLibc+"@latest"); err != nil {
+		if out, err := shell(true, "go", "get", *oLibc+libcVersion); err != nil {
 			return fmt.Errorf("%s\vFAIL: %v", out, err)
 		}
 
@@ -840,7 +860,7 @@ func TestCSmith(t *testing.T) {
 			}
 		}
 	default:
-		if out, err := shell(true, "go", "get", *oLibc+"@latest"); err != nil { //TODO- @latest
+		if out, err := shell(true, "go", "get", *oLibc+libcVersion); err != nil {
 			t.Fatalf("%s\vFAIL: %v", out, err)
 		}
 	}
@@ -850,6 +870,11 @@ func TestCSmith(t *testing.T) {
 		"-s 2949258094",
 		"-s 3329111231",
 		"-s 4101947480",
+	}
+
+	// Other blacklist
+	blacklist := []struct{ target, seed string }{
+		{"linux/ppc64le", "8032246412188002"}, // gcc 10.2.1 bug.
 	}
 
 	fixedBugs := []string{
@@ -895,6 +920,7 @@ func TestCSmith(t *testing.T) {
 		"--max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --bitfields -s 1701143130",
 		"--max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --bitfields -s 20004725738999789",
 		"--max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --bitfields -s 3654957324",
+		"--max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --bitfields -s 8032246412188002",
 		"--no-bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 1302111308",
 		"--no-bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3285852464",
 		"--no-bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3609090094",
@@ -918,6 +944,7 @@ out:
 		switch {
 		case i < len(fixedBugs):
 			s := fixedBugs[i]
+			trc("", s)
 			if re != nil && !re.MatchString(s) {
 				continue
 			}
@@ -927,6 +954,11 @@ out:
 					if strings.Contains(s, v) {
 						continue out
 					}
+				}
+			}
+			for _, v := range blacklist {
+				if v.target == target && strings.Contains(s, v.seed) {
+					continue out
 				}
 			}
 
@@ -1151,7 +1183,7 @@ func testSQLiteSimple(t *testing.T) {
 			}
 		}
 	default:
-		if out, err := shell(true, "go", "get", *oLibc+"@latest"); err != nil {
+		if out, err := shell(true, "go", "get", *oLibc+libcVersion); err != nil {
 			t.Fatalf("%s\vFAIL: %v", out, err)
 		}
 	}
@@ -1361,7 +1393,7 @@ func testSQLiteSpeedTest1(t *testing.T) {
 			}
 		}
 	default:
-		if out, err := shell(true, "go", "get", *oLibc+"@latest"); err != nil {
+		if out, err := shell(true, "go", "get", *oLibc+libcVersion); err != nil {
 			t.Fatalf("%s\vFAIL: %v", out, err)
 		}
 	}

@@ -115,13 +115,27 @@ var testExecKnownFails = map[string]struct{}{
 
 	// ==== COMPILE FAIL - does not compile.
 
+	`assets/CompCert-3.6/test/c/almabench.c`:                                                {}, // COMPILE FAIL
+	`assets/CompCert-3.6/test/c/binarytrees.c`:                                              {}, // COMPILE FAIL
+	`assets/CompCert-3.6/test/c/bisect.c`:                                                   {}, // COMPILE FAIL
+	`assets/CompCert-3.6/test/c/fft.c`:                                                      {}, // COMPILE FAIL
+	`assets/CompCert-3.6/test/c/fftsp.c`:                                                    {}, // COMPILE FAIL
+	`assets/CompCert-3.6/test/c/nbody.c`:                                                    {}, // COMPILE FAIL
+	`assets/CompCert-3.6/test/c/perlin.c`:                                                   {}, // COMPILE FAIL
+	`assets/CompCert-3.6/test/c/spectral.c`:                                                 {}, // COMPILE FAIL
 	`assets/benchmarksgame-team.pages.debian.net/mandelbrot-3.c`:                            {}, // COMPILE FAIL: "\"mandelbrot-3.c:27:21: unsupported vector type: v2df (expr.go:524:expr0: expr.go:3817:primaryExpression: expr.go:4273:primaryExpressionFloatConst: type.go:60:verifyTyp: type.go:65:typ0: type.go:455:is..."
 	`assets/benchmarksgame-team.pages.debian.net/mandelbrot-4.c`:                            {}, // COMPILE FAIL: "\"mandelbrot-4.c:19:21: unsupported vector type: v2df (expr.go:524:expr0: expr.go:3817:primaryExpression: expr.go:4273:primaryExpressionFloatConst: type.go:60:verifyTyp: type.go:65:typ0: type.go:455:is..."
 	`assets/benchmarksgame-team.pages.debian.net/mandelbrot-8.c`:                            {}, // COMPILE FAIL: "\"mandelbrot-8.c:16:30: unsupported vector type: Vec (expr.go:1198:checkVolatileExpr: expr.go:101:expr: expr.go:530:expr0: expr.go:1682:unaryExpression: type.go:422:isValidType: type.go:455:isValidType..."
 	`assets/benchmarksgame-team.pages.debian.net/mandelbrot.c`:                              {}, // COMPILE FAIL: "\"mandelbrot.c:23:15: unsupported vector type: v2df (expr.go:524:expr0: expr.go:3817:primaryExpression: expr.go:4273:primaryExpressionFloatConst: type.go:60:verifyTyp: type.go:65:typ0: type.go:455:isVa..."
+	`assets/benchmarksgame-team.pages.debian.net/nbody-2.c`:                                 {}, // COMPILE FAIL
+	`assets/benchmarksgame-team.pages.debian.net/nbody-3.c`:                                 {}, // COMPILE FAIL
 	`assets/benchmarksgame-team.pages.debian.net/nbody-4.c`:                                 {}, // COMPILE FAIL: "\"/Library/Developer/CommandLineTools/usr/lib/clang/15.0.0/include/avx512fp16intrin.h:104:52: unexpected '(', expected postfix expression\""
 	`assets/benchmarksgame-team.pages.debian.net/nbody-5.c`:                                 {}, // COMPILE FAIL: "\"nbody-5.c:22:1: unsupported vector type: v2df (decl.go:596:declaration: type.go:574:defineStructType: type.go:509:structLiteral: type.go:263:typ0: type.go:65:typ0: type.go:455:isValidType1:)\""
+	`assets/benchmarksgame-team.pages.debian.net/nbody-6.c`:                                 {}, // COMPILE FAIL
+	`assets/benchmarksgame-team.pages.debian.net/nbody-7.c`:                                 {}, // COMPILE FAIL
 	`assets/benchmarksgame-team.pages.debian.net/nbody-8.c`:                                 {}, // COMPILE FAIL: "\"/Library/Developer/CommandLineTools/usr/lib/clang/15.0.0/include/avx512fp16intrin.h:104:52: unexpected '(', expected postfix expression\""
+	`assets/benchmarksgame-team.pages.debian.net/nbody.c`:                                   {}, // COMPILE FAIL
+	`assets/benchmarksgame-team.pages.debian.net/spectral-norm.c`:                           {}, // COMPILE FAIL
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/20000326-2.c`:                     {}, // COMPILE FAIL: "\"20000326-2.c:7:3: label declarations not supported (compile.go:433:compile: decl.go:294:externalDeclaration: decl.go:322:functionDefinition: decl.go:352:functionDefinition0: stmt.go:324:compoundState..."
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/20000405-3.c`:                     {}, // COMPILE FAIL: "\"20000405-3.c:1:1: unsupported alignment 32 of struct foo {entry array of 40 pointer to void} (decl.go:296:externalDeclaration: decl.go:596:declaration: type.go:574:defineStructType: type.go:509:struc..."
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/20000518-1.c`:                     {}, // COMPILE FAIL: "\"20000518-1.c:7:2: label declarations not supported (compile.go:433:compile: decl.go:294:externalDeclaration: decl.go:322:functionDefinition: decl.go:352:functionDefinition0: stmt.go:324:compoundState..."
@@ -282,6 +296,11 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/string-opt-18.c`:                  {}, // COMPILE FAIL: "string-opt-18.o.go:27:5: undefined: \"mempcpy\" external (all_test.go:444:1: all_test.go:530:testExec1: ccgo.go:192:Main: ccgo.go:581:main: link.go:302:link: link.go:814:link:) (all_test.go:444:1: all_t..."
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/user-printf.c`:                    {}, // COMPILE FAIL: "user-printf.o.go:1734:15: undefined: \"tmpnam\" external (all_test.go:444:1: all_test.go:530:testExec1: ccgo.go:192:Main: ccgo.go:581:main: link.go:302:link: link.go:814:link:)"
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/zero-struct-2.c`:                  {}, // COMPILE FAIL: "\"zero-struct-2.c:15:48: TODO \\\"Xone_raw_spinlock(cgtls)\\\" raw_spinlock_t, 0 exprDefault -> spinlock_t, 0 exprDefault (zero-struct-2.c:15:48:) (expr.go:522:expr0: expr.go:2206:postfixExpression: init.g..."
+	`assets/github.com/AbsInt/CompCert/test/c/almabench.c`:                                  {}, // COMPILE FAIL
+	`assets/github.com/AbsInt/CompCert/test/c/binarytrees.c`:                                {}, // COMPILE FAIL
+	`assets/github.com/AbsInt/CompCert/test/c/bisect.c`:                                     {}, // COMPILE FAIL
+	`assets/github.com/AbsInt/CompCert/test/c/fft.c`:                                        {}, // COMPILE FAIL
+	`assets/github.com/AbsInt/CompCert/test/c/fftsp.c`:                                      {}, // COMPILE FAIL
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20020411-1.c`:     {}, // COMPILE FAIL: "\"TODO UnaryExpressionReal (expr.go:101:expr: expr.go:494:expr0: expr.go:3439:assignmentExpression: expr.go:101:expr: expr.go:530:expr0: expr.go:1717:unaryExpression:)\""
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20030330-1.c`:     {}, // COMPILE FAIL: "20030330-1.o.go:26:4: undefined: \"link_error\" external (all_test.go:444:1: all_test.go:530:testExec1: ccgo.go:192:Main: ccgo.go:581:main: link.go:302:link: link.go:814:link:) (all_test.go:444:1: all_t..."
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20040302-1.c`:     {}, // COMPILE FAIL: "\"TODO <nil> (asm_amd64.s:1650:goexit: compile.go:433:compile: decl.go:294:externalDeclaration: decl.go:322:functionDefinition: decl.go:344:functionDefinition0: decl.go:101:newFnCtx:)\""

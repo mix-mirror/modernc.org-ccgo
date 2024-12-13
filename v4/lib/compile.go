@@ -345,6 +345,15 @@ func (c *ctx) id() int {
 	return c.nextID
 }
 
+func (c *ctx) err2(n cc.Node, err error) {
+	c.hasErrors = true
+	var s string
+	if n != nil {
+		s = fmt.Sprintf("%v: ", n.Position())
+	}
+	c.eh("%s%s", s, err.Error())
+}
+
 func (c *ctx) err(err error) {
 	c.hasErrors = true
 	c.eh("%s", err.Error())

@@ -45,6 +45,7 @@ assets/ccgo/bug/atomic.c
 assets/ccgo/bug/bitfield.c
 assets/ccgo/bug/complit.c
 assets/ccgo/bug/condfn.c
+assets/ccgo/bug/conv.c
 assets/ccgo/bug/cpl_convert.c
 assets/ccgo/bug/csmith.c
 assets/ccgo/bug/csmith2.c
@@ -2017,6 +2018,7 @@ assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20070212-2.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20070212-3.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20070424-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20070517-1.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20070614-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20070623-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20070724-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20070824-1.c
@@ -3455,6 +3457,7 @@ assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20070212-2.
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20070212-3.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20070424-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20070517-1.c
+assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20070614-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20070623-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20070724-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20070824-1.c
