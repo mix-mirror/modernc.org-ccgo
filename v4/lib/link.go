@@ -1245,6 +1245,7 @@ func (l *linker) walk(v any, fn func(any)) {
 		}
 
 		if _, ok := x.(gc.Token); ok {
+			fn(x)
 			return
 		}
 
@@ -1328,22 +1329,37 @@ func nodeName(n gc.Node) string {
 			switch y := v.(type) {
 			case *gc.AliasDecl:
 				return y.Ident.Src()
+			case *gc.TypeDef:
+				return y.Ident.Src()
+			default:
+				trc("1334:")
+				panic(todo("internal error: %v: %T %s", n.Position(), n, y.Source(false)))
 			}
 
+			trc("1338:")
 			panic(todo("internal error: %v: %T", n.Position(), n))
 		}
+	case gc.Token:
+		return x.Src()
+	case *gc.Conversion:
+		return ""
 	}
 
-	panic(todo("internal error: %v: %T", n.Position(), n))
+	trc("1345: internal error: %v: %T %s", n.Position(), n, n.Source(false))
+	// panic(todo("internal error: %v: %T", n.Position(), n))
+	return ""
 }
 
 func (l *linker) minimizeMain(src *gc.SourceFile, pkg *gc.Package) {
 	tlds := map[gc.Node]struct{}{}
+	name2tld := map[string]gc.Node{}
 	for _, v := range src.TopLevelDecls {
 		tlds[v] = struct{}{}
+		name2tld[nodeName(v)] = v
 	}
 	for _, v := range pkg.Scope.Nodes {
 		tlds[v.Node] = struct{}{}
+		name2tld[nodeName(v.Node)] = v.Node
 	}
 	var roots []gc.Node
 	for _, v := range pkg.SourceFiles[0].TopLevelDecls {
@@ -1353,6 +1369,10 @@ func (l *linker) minimizeMain(src *gc.SourceFile, pkg *gc.Package) {
 			case "init", "main":
 				roots = append(roots, x)
 			}
+		default:
+			if nodeName(x) == "_" {
+				roots = append(roots, x)
+			}
 		}
 	}
 	need := map[string]struct{}{}
@@ -1360,10 +1380,13 @@ func (l *linker) minimizeMain(src *gc.SourceFile, pkg *gc.Package) {
 		root := roots[0]
 		nm := nodeName(root)
 		if _, ok := need[nm]; ok {
-			continue
+			if _, ok := root.(*gc.FunctionDecl); !ok || nm != "init" && nm != "_" {
+				continue
+			}
 		}
 
 		need[nm] = struct{}{}
+
 		l.walk(root, func(v any) {
 			switch x := v.(type) {
 			case reflect.Value:
@@ -1389,9 +1412,16 @@ func (l *linker) minimizeMain(src *gc.SourceFile, pkg *gc.Package) {
 							roots = append(roots, z)
 						}
 					case *gc.AliasDecl:
-						trc("1392: %v: %q", y.Position(), y.Source(false))
+						if sc := z.LexicalScope(); sc != nil && sc == pkg.Scope {
+							roots = append(roots, z)
+						}
+					case *gc.TypeDef:
+						if sc := z.LexicalScope(); sc != nil && sc == pkg.Scope {
+							roots = append(roots, z)
+						}
 					default:
 						trc("1394: %v: %T", y.Position(), z)
+						panic(todo(""))
 					}
 				case *gc.TypeNameNode:
 					switch z := y.Name.ResolvedTo().(type) {
@@ -1402,37 +1432,49 @@ func (l *linker) minimizeMain(src *gc.SourceFile, pkg *gc.Package) {
 							roots = append(roots, z)
 						}
 					default:
-						trc("1405: %v: %q", z.Position(), y.Name.Source(false))
+						trc("1405: %v: %q %T", z.Position(), y.Name.Source(false), z)
+						panic(todo(""))
 					}
 				case *gc.QualifiedIdent:
-					trc("QI %q %T", y.Source(false), y.ResolvedTo())
-					// switch z := y.ResolvedTo().(type) {
-					// case nil, gc.PredefinedType:
+					if y.PackageName.IsValid() {
+						break
+					}
+
+					switch z := y.ResolvedTo().(type) {
+					case nil:
+						if n, ok := name2tld[y.Ident.Src()]; ok {
+							roots = append(roots, n)
+						}
+					case gc.PredefinedType:
+						// ok
+					case *gc.AliasDecl:
+						if sc := z.LexicalScope(); sc != nil && sc == pkg.Scope {
+							roots = append(roots, z)
+						}
+					default:
+						trc("1426: %v: %q %T", y.Position(), y.Source(false), z)
+						panic(todo(""))
+					}
+				case gc.Token:
+					nm := y.Src()
+					if nm == "init" {
+						break
+					}
+
+					if n, ok := name2tld[nm]; ok {
+						roots = append(roots, n)
+					}
+					// case *gc.Block, *gc.BasicLit, *gc.Conversion, *gc.Selector, *gc.Arguments, *gc.ExprListItem,
+					// 	*gc.UnaryExpr, *gc.ParenExpr, *gc.ReturnStmt, *gc.ExpressionStmt, *gc.CompositeLit,
+					// 	*gc.LiteralValue, *gc.KeyedElement:
+
 					// 	// ok
-					// // case *gc.FunctionDecl:
-					// // 	if _, ok := tlds[z]; ok {
-					// // 		roots = append(roots, z)
-					// // 	}
-					// // case *gc.Variable:
-					// // 	if sc := z.LexicalScope(); sc != nil && sc == pkg.Scope {
-					// // 		roots = append(roots, z)
-					// // 	}
-					// // case *gc.Constant:
-					// // 	if _, ok := tlds[z]; ok {
-					// // 		roots = append(roots, z)
-					// // 	}
-					// // case *gc.AliasDecl:
-					// // 	trc("1424: %v: %q", y.Position(), y.Source(false))
-					// default:
-					// 	trc("1426: %v: %q %T", y.Position(), y.Source(false), z)
-					// }
-				default:
-					// trc("1429: %T", y)
+					// case gc.Node:
+					// 	trc("1443: %v: %T %q %s", y.Position(), y, nodeName(y), y.Source(false))
 				}
 			}
 		})
 	}
-	return
 	w := 0
 	for _, v := range src.TopLevelDecls {
 		nm := nodeName(v)
