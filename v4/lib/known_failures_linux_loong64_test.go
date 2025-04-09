@@ -49,11 +49,6 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/vararg-complex-2.c`:                                   {}, // EXEC FAIL: "assets/github.com/vnmakarov/mir/c-tests/lacc/vararg-complex-2.c: 0,0,0,0"
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/whitespace.c`:                                         {}, // EXEC FAIL: "assets/github.com/vnmakarov/mir/c-tests/lacc/whitespace.c: Hello"
 
-	// Reported: https://groups.google.com/g/golang-dev/c/pUHLzB5b6HI
-	//
-	//TODO Waiting for confirmation and/or resolution.
-	`assets/benchmarksgame-team.pages.debian.net/mandelbrot-9.c`: {}, // EXEC FAIL
-
 	// ==== BUILD FAIL - compiles but does not build.
 
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/alias-3.c`:                 {}, // BUILD FAIL: "exit status 1"

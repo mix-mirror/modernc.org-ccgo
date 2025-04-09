@@ -1156,7 +1156,12 @@ func (c *ctx) multiplicativeExpression(w writer, n *cc.MultiplicativeExpression,
 		c.err(errorf("TODO %v", n.Case))
 	case cc.MultiplicativeExpressionMul: // MultiplicativeExpression '*' CastExpression
 		x, y := c.binopArgs(w, n.MultiplicativeExpression, n.CastExpression, n.Type())
-		b.w("(%s * %s)", x, y)
+		switch {
+		case cc.IsFloatingPointType(t):
+			b.w("(%s(%s * %s))", c.typ(n, t), x, y)
+		default:
+			b.w("(%s * %s)", x, y)
+		}
 	case cc.MultiplicativeExpressionDiv: // MultiplicativeExpression '/' CastExpression
 		x, y := c.binopArgs(w, n.MultiplicativeExpression, n.CastExpression, n.Type())
 		b.w("(%s / %s)", x, y)
