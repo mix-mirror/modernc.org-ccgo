@@ -1604,11 +1604,35 @@ out:
 		}
 	case cc.UnaryExpressionAddrof: // '&' CastExpression
 		// trc("%v: nt %v, ct %v, '%s' %v", n.Token.Position(), n.Type(), n.CastExpression.Type(), cc.NodeSource(n), mode)
-		switch n.Type().Undecay().(type) {
+		switch x := n.Type().Undecay().(type) {
 		case *cc.FunctionType:
 			rt, rmode = n.Type(), mode
 			b.w("%s", c.expr(w, n.CastExpression, nil, mode))
 			break out
+		case *cc.PointerType:
+			switch x.Elem().(type) {
+			case *cc.FunctionType:
+				d := c.declaratorOf(n.CastExpression)
+				if d == nil {
+					break
+				}
+
+				// Linker does not yet handle weakly linked functions. A special case is
+				// handled here so it should be backward compatible with:
+				//
+				//  - The definition in cc, 'int __darwin_check_fd_set_overflow(int, void *,
+				//    int);' lacks the weak attribute
+				//
+				//  - The definition in libc 'var X__darwin_check_fd_set_overflow uintptr'
+				//    should not exist in the first place, but we cannot remove it without
+				//    breaking existing code.
+				switch d.Name() {
+				case "__darwin_check_fd_set_overflow":
+					rt, rmode = n.Type(), mode
+					b.w("(0)")
+					break out
+				}
+			}
 		}
 
 		rt, rmode = n.Type(), exprUintptr
@@ -2021,6 +2045,10 @@ out:
 		c.err(errorf("TODO %v", n.Case))
 	case cc.PostfixExpressionCall: // PostfixExpression '(' ArgumentExpressionList ')'
 		switch c.declaratorOf(n.PostfixExpression).Name() {
+		case "__darwin_check_fd_set_overflow": // See coments at unaryExpression()
+			b.w("(1)")
+			rt, rmode = n.Type(), mode
+			break out
 		case
 			"__builtin_constant_p",
 			"__ccgo__types_compatible_p":
@@ -2115,11 +2143,11 @@ out:
 			// void __atomic_load (type *ptr, type *ret, int memorder)
 			// void __atomic_store (type *ptr, type *val, int memorder)
 			return c.stdatomicLoad(w, n, t, mode)
-		case	"__c11_atomic_load":
+		case "__c11_atomic_load":
 			return c.c11AtomicLoad(w, n, t, mode)
-		case	"__c11_atomic_store":
+		case "__c11_atomic_store":
 			return c.c11AtomicStore(w, n, t, mode)
-		case	"__atomic_exchange":
+		case "__atomic_exchange":
 			// void __atomic_exchange (type *ptr, type *val, type *ret, int memorder)
 			return c.stdatomicExchange(w, n, t, mode)
 		case "__c11_atomic_exchange":
