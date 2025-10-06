@@ -18,6 +18,12 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/macro-paste.c`:                                        {}, // EXEC FAIL
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/whitespace.c`:                                         {}, // EXEC FAIL
 
+	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr36093.c`: {}, // EXEC FAIL: assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr36093.c: panic: 544
+
+	// Reported: https://groups.google.com/g/golang-dev/c/JUelxXEmZw4
+	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr31448-2.c`:                 {}, // EXEC FAIL: assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr31448-2.c: : FAIL: signal: aborted
+	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr31448-2.c`: {}, // EXEC FAIL: assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr31448-2.c: : FAIL: signal: aborted
+
 	// ==== BUILD FAIL - compiles but does not build.
 
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/alias-3.c`:                 {}, // BUILD FAIL: "exit status 1"
@@ -257,6 +263,7 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr60502.c`:                            {}, // COMPILE FAIL: "\"pr60502.c:9:16: unsupported vector type: v16i8 (expr.go:115:expr: expr.go:169:convert: expr.go:329:convertType: type.go:60:verifyTyp: type.go:65:typ0: type.go:440:isValidType1:)\""
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr70190.c`:                            {}, // COMPILE FAIL: "\"TODO <nil> (asm_ppc64x.s:912:goexit: compile.go:433:compile: decl.go:295:externalDeclaration: decl.go:323:functionDefinition: decl.go:345:functionDefinition0: decl.go:102:newFnCtx:)\""
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr70199.c`:                            {}, // COMPILE FAIL: "\"TODO <nil> (asm_ppc64x.s:912:goexit: compile.go:433:compile: decl.go:295:externalDeclaration: decl.go:323:functionDefinition: decl.go:345:functionDefinition0: decl.go:102:newFnCtx:)\""
+	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr70355.c`:                            {}, // COMPILE FAIL: "\"TODO vector (compile.go:478:compile: decl.go:298:externalDeclaration: decl.go:985:declaration: decl.go:1150:initDeclarator: type.go:18:typedef: type.go:89:typ0:)\""
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr70633.c`:                            {}, // COMPILE FAIL: "\"pr70633.c:10:5: unsupported vector type: V (decl.go:384:functionDefinition0: stmt.go:261:compoundStatement: decl.go:227:declareLocals: type.go:42:typ: type.go:65:typ0: type.go:440:isValidType1:)\""
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr70916.c`:                            {}, // COMPILE FAIL: "\"-: TODO (expr.go:3522:assignmentExpression: expr.go:101:expr: expr.go:519:expr0: expr.go:927:conditionalExpression: expr.go:70:topExpr: expr.go:85:expr:)\""
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr71109.c`:                            {}, // COMPILE FAIL: "\"pr71109.c:15:7: too few arguments to function 'foo', type 'function(int, struct S, struct T)' in 'foo (bar, a)' (stmt.go:38:statement: expr.go:70:topExpr: expr.go:101:expr: expr.go:535:expr0: expr.go..."
@@ -364,7 +371,6 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr23467.c`:                            {}, // COMPILE FAIL: "\"pr23467.c:3:1: unsupported alignment 8 of int (decl.go:597:declaration: type.go:559:defineStructType: type.go:494:structLiteral: type.go:263:typ0: type.go:65:typ0: type.go:426:isValidType1:)\""
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr24135.c`:                            {}, // COMPILE FAIL: "\"pr24135.c:7:3: label declarations not supported (compile.go:433:compile: decl.go:295:externalDeclaration: decl.go:323:functionDefinition: decl.go:353:functionDefinition0: stmt.go:324:compoundStatemen..."
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr34154.c`:                            {}, // COMPILE FAIL: "\"TODO SelectionStatementSwitch (decl.go:353:functionDefinition0: stmt.go:324:compoundStatement: stmt.go:360:blockItem: stmt.go:42:statement: stmt.go:444:selectionStatement: stmt.go:512:selectionStatem..."
-	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr36093.c`:                            {}, // COMPILE FAIL: "\"pr36093.c:13:5: unsupported alignment 128 of Foo (decl.go:607:declaration: decl.go:776:initDeclarator: type.go:42:typ: type.go:337:typ0: type.go:65:typ0: type.go:426:isValidType1:)\""
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr38151.c`:                            {}, // COMPILE FAIL: "\"TODO *cc.PredefinedType _Complex int _Complex int (decl.go:297:externalDeclaration: decl.go:597:declaration: type.go:559:defineStructType: type.go:494:structLiteral: type.go:263:typ0: type.go:159:typ..."
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr38969.c`:                            {}, // COMPILE FAIL: "\"TODO UnaryExpressionReal (expr.go:101:expr: expr.go:507:expr0: expr.go:3517:assignmentExpression: expr.go:101:expr: expr.go:543:expr0: expr.go:1731:unaryExpression:)\""
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr41935.c`:                            {}, // COMPILE FAIL: "\"pr41935.c:10:10: TODO (expr.go:1919:postfixExpressionIndex: expr.go:101:expr: expr.go:535:expr0: expr.go:1970:postfixExpression: expr.go:1803:postfixExpressionIndex: expr.go:1753:mul:)\""

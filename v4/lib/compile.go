@@ -170,7 +170,6 @@ func (b *buf) len() int                    { return len(b.b) }
 func (b *buf) reset()                      { *b = buf{} }
 
 func (b *buf) w(s string, args ...interface{}) {
-	//trc("%v: %q %s", origin(2), s, args)
 	fmt.Fprintf(b, s, args...)
 }
 
@@ -526,11 +525,18 @@ func (c *ctx) compile(ifn, ofn string) (err error) {
 	}
 	sort.Strings(a)
 	for _, k := range a {
+		d := c.externsDeclared[k]
+		var ps string
+		if c.task.positions {
+			ps = fmt.Sprintf("\n// %v:", d.Position())
+		}
 		switch d := c.externsDeclared[k]; t := d.Type().(type) {
 		case *cc.FunctionType:
-			c.w("\n\nfunc %s%s%s", tag(meta), k, c.signature(t, false, false, false))
+			if s := c.signature(t, false, false, false); s != "" {
+				c.w("\n%s\nfunc %s%s%s", ps, tag(meta), k, s)
+			}
 		default:
-			c.w("\n\nvar %s%s %s", tag(meta), k, c.typ2(d, t, false))
+			c.w("\n%s\nvar %s%s %s", ps, tag(meta), k, c.typ2(d, t, false))
 		}
 	}
 	b, err := json.MarshalIndent(&c.jsonMeta, "", "\t")
@@ -677,23 +683,23 @@ func (c *ctx) defines(w writer) {
 
 		if r != "" {
 			if !c.task.header && c.task.prefixDefineSet {
-				w.w("%s%sconst %s%s = %q;", sep(m.Name), c.posComment(m), tag(define), m.Name.Src(), r)
+				w.w("%s%sconst %s%s = %q;", sep(m.Name, "\n"), c.posComment(m), tag(define), m.Name.Src(), r)
 			}
 			if c.task.header && r != "INFINITY" {
 				if _, err := strconv.ParseUint(r, 0, 64); err == nil {
-					w.w("%s%sconst %s%s = %s;", sep(m.Name), c.posComment(m), tag(macro), m.Name.Src(), r)
+					w.w("%s%sconst %s%s = %s;", sep(m.Name, "\n"), c.posComment(m), tag(macro), m.Name.Src(), r)
 					c.macrosEmited.add(nm)
 					continue
 				}
 
 				if _, err := strconv.ParseFloat(r, 64); err == nil {
-					w.w("%s%sconst %s%s = %s;", sep(m.Name), c.posComment(m), tag(macro), m.Name.Src(), r)
+					w.w("%s%sconst %s%s = %s;", sep(m.Name, "\n"), c.posComment(m), tag(macro), m.Name.Src(), r)
 					c.macrosEmited.add(nm)
 					continue
 				}
 
 				if _, err := strconv.Unquote(r); err == nil {
-					w.w("%s%sconst %s%s = %s;", sep(m.Name), c.posComment(m), tag(macro), m.Name.Src(), r)
+					w.w("%s%sconst %s%s = %s;", sep(m.Name, "\n"), c.posComment(m), tag(macro), m.Name.Src(), r)
 					c.macrosEmited.add(nm)
 					continue
 				}
@@ -702,21 +708,21 @@ func (c *ctx) defines(w writer) {
 
 		switch x := m.Value().(type) {
 		case cc.Int64Value:
-			w.w("%s%sconst %s%s = %v;", sep(m.Name), c.posComment(m), tag(macro), m.Name.Src(), x)
+			w.w("%s%sconst %s%s = %v;", sep(m.Name, "\n"), c.posComment(m), tag(macro), m.Name.Src(), x)
 			c.macrosEmited.add(nm)
 		case cc.UInt64Value:
-			w.w("%s%sconst %s%s = %v;", sep(m.Name), c.posComment(m), tag(macro), m.Name.Src(), x)
+			w.w("%s%sconst %s%s = %v;", sep(m.Name, "\n"), c.posComment(m), tag(macro), m.Name.Src(), x)
 			c.macrosEmited.add(nm)
 		case cc.Float64Value:
 			if s := fmt.Sprint(x); s == r {
-				w.w("%s%sconst %s%s = %s;", sep(m.Name), c.posComment(m), tag(macro), m.Name.Src(), s)
+				w.w("%s%sconst %s%s = %s;", sep(m.Name, "\n"), c.posComment(m), tag(macro), m.Name.Src(), s)
 				c.macrosEmited.add(nm)
 				break
 			}
 
-			w.w("%s%sconst %s%s = %v;", sep(m.Name), c.posComment(m), tag(macro), m.Name.Src(), x)
+			w.w("%s%sconst %s%s = %v;", sep(m.Name, "\n"), c.posComment(m), tag(macro), m.Name.Src(), x)
 		case cc.StringValue:
-			w.w("%s%sconst %s%s = %q;", sep(m.Name), c.posComment(m), tag(macro), m.Name.Src(), x[:len(x)-1])
+			w.w("%s%sconst %s%s = %q;", sep(m.Name, "\n"), c.posComment(m), tag(macro), m.Name.Src(), x[:len(x)-1])
 			c.macrosEmited.add(nm)
 		default:
 			if r == "" {
@@ -752,7 +758,7 @@ func (c *ctx) defines(w writer) {
 						r = r[:len(r)-len("U")]
 					}
 					if _, err := strconv.ParseUint(r, 0, 64); err == nil {
-						w.w("%s%sconst %s%s = %v;", sep(m.Name), c.posComment(m), tag(macro), m.Name.Src(), r)
+						w.w("%s%sconst %s%s = %v;", sep(m.Name, "\n"), c.posComment(m), tag(macro), m.Name.Src(), r)
 						c.macrosEmited.add(nm)
 						break
 					}
@@ -787,39 +793,39 @@ func (c *ctx) defines(w writer) {
 				if _, err := strconv.ParseFloat(r, 64); err == nil {
 					switch {
 					case !dot && !exp && strings.HasPrefix(r, "0"):
-						w.w("%s%sconst %s%s = %q;", sep(m.Name), c.posComment(m), tag(macro), m.Name.Src(), r)
+						w.w("%s%sconst %s%s = %q;", sep(m.Name, "\n"), c.posComment(m), tag(macro), m.Name.Src(), r)
 					default:
-						w.w("%s%sconst %s%s = %v;", sep(m.Name), c.posComment(m), tag(macro), m.Name.Src(), r)
+						w.w("%s%sconst %s%s = %v;", sep(m.Name, "\n"), c.posComment(m), tag(macro), m.Name.Src(), r)
 					}
 					c.macrosEmited.add(nm)
 					break
 				}
 
-				w.w("%s%sconst %s%s = %q;", sep(m.Name), c.posComment(m), tag(macro), m.Name.Src(), r)
+				w.w("%s%sconst %s%s = %q;", sep(m.Name, "\n"), c.posComment(m), tag(macro), m.Name.Src(), r)
 				c.macrosEmited.add(nm)
 			case rune(cc.IDENTIFIER):
-				w.w("%s%sconst %s%s = %q;", sep(m.Name), c.posComment(m), tag(macro), m.Name.Src(), r)
+				w.w("%s%sconst %s%s = %q;", sep(m.Name, "\n"), c.posComment(m), tag(macro), m.Name.Src(), r)
 				c.macrosEmited.add(nm)
 			case rune(cc.STRINGLITERAL):
-				w.w("%s%sconst %s%s = %q;", sep(m.Name), c.posComment(m), tag(macro), m.Name.Src(), r[1:len(r)-1])
+				w.w("%s%sconst %s%s = %q;", sep(m.Name, "\n"), c.posComment(m), tag(macro), m.Name.Src(), r[1:len(r)-1])
 				c.macrosEmited.add(nm)
 			case rune(cc.LONGSTRINGLITERAL):
 				r = r[1:] // -leading "L"
-				w.w("%s%sconst %s%s = %q;", sep(m.Name), c.posComment(m), tag(macro), m.Name.Src(), r[1:len(r)-1])
+				w.w("%s%sconst %s%s = %q;", sep(m.Name, "\n"), c.posComment(m), tag(macro), m.Name.Src(), r[1:len(r)-1])
 				c.macrosEmited.add(nm)
 			case rune(cc.CHARCONST):
 				if _, err := strconv.Unquote(r); err == nil {
-					w.w("%s%sconst %s%s = %v;", sep(m.Name), c.posComment(m), tag(macro), m.Name.Src(), r)
+					w.w("%s%sconst %s%s = %v;", sep(m.Name, "\n"), c.posComment(m), tag(macro), m.Name.Src(), r)
 					c.macrosEmited.add(nm)
 				}
 			case rune(cc.LONGCHARCONST):
 				r = r[1:] // -leading "L"
 				if _, err := strconv.Unquote(r); err == nil {
-					w.w("%s%sconst %s%s = %v;", sep(m.Name), c.posComment(m), tag(macro), m.Name.Src(), r)
+					w.w("%s%sconst %s%s = %v;", sep(m.Name, "\n"), c.posComment(m), tag(macro), m.Name.Src(), r)
 					c.macrosEmited.add(nm)
 				}
 			default:
-				w.w("%s%sconst %s%s = %q;", sep(m.Name), c.posComment(m), tag(macro), m.Name.Src(), r)
+				w.w("%s%sconst %s%s = %q;", sep(m.Name, "\n"), c.posComment(m), tag(macro), m.Name.Src(), r)
 				c.macrosEmited.add(nm)
 			}
 		}

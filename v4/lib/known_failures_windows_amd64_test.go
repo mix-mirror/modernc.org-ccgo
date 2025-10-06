@@ -44,6 +44,9 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/declaration-default-int.c`:                            {}, // EXEC FAIL
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/function-implicit-declare.c`:                          {}, // EXEC FAIL
 
+	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr36093.c`:     {}, // EXEC FAIL: assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr36093.c: panic: 544
+	`assets/benchmarksgame-team.pages.debian.net/reverse-complement-2.c`: {}, // EXEC FAIL: assets/benchmarksgame-team.pages.debian.net/reverse-complement-2.c: panic: runtime error: index out of range [-32]
+
 	// ==== BUILD FAIL - compiles but does not build.
 
 	`assets/benchmarksgame-team.pages.debian.net/reverse-complement-4.c`: {}, // BUILD FAIL: "exit status 1"
@@ -311,7 +314,6 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/benchmarksgame-team.pages.debian.net/nbody-4.c`:                                     {}, // COMPILE FAIL: "\"emmintrin.h:979:1: unsupported vector type: __m128d (stmt.go:48:statement: stmt.go:981:jumpStatement: decl.go:175:newAutovar: type.go:42:typ: type.go:65:typ0: type.go:440:isValidType1:)\""
 	`assets/benchmarksgame-team.pages.debian.net/nbody-5.c`:                                     {}, // COMPILE FAIL: "\"nbody-5.c:22:1: unsupported vector type: v2df (decl.go:943:declaration: type.go:559:defineStructType: type.go:494:structLiteral: type.go:263:typ0: type.go:65:typ0: type.go:440:isValidType1:)\""
 	`assets/benchmarksgame-team.pages.debian.net/nbody-8.c`:                                     {}, // COMPILE FAIL: "\"nbody-8.c:119:24: unsupported vector type: __m128d (expr.go:557:expr0: expr.go:1998:postfixExpression: expr.go:1917:postfixExpressionIndex: type.go:42:typ: type.go:65:typ0: type.go:440:isValidType1:)..."
-	`assets/benchmarksgame-team.pages.debian.net/reverse-complement-2.c`:                        {}, // COMPILE FAIL: "reverse-complement-2.o.go:1196:3: undefined: \"pthread_create\" external (all_test.go:444:1: all_test.go:538:testExec1: ccgo.go:197:Main: ccgo.go:659:main: link.go:302:link: link.go:862:link:)"
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/20000211-1.c`:                         {}, // COMPILE FAIL: "\"TODO (compile.go:460:compile: decl.go:297:externalDeclaration: decl.go:953:declaration: decl.go:1118:initDeclarator: type.go:18:typedef: type.go:315:typ0:)\""
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/20000326-2.c`:                         {}, // COMPILE FAIL: "\"20000326-2.c:7:3: label declarations not supported (compile.go:460:compile: decl.go:295:externalDeclaration: decl.go:361:functionDefinition: decl.go:401:functionDefinition0: stmt.go:330:compoundState..."
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/20000405-3.c`:                         {}, // COMPILE FAIL

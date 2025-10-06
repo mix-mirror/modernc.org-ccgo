@@ -184,14 +184,14 @@ func (o *object) collectConsts(file *gc.SourceFile) (consts map[string]string, e
 }
 
 func (t *Task) link() (err error) {
-	// 	if dmesgs {
-	// 		dmesg("%v: t.linkFiles %v", origin(1), t.linkFiles)
-	// 		defer func() {
-	// 			if err != nil {
-	// 				dmesg("", errorf("", err))
-	// 			}
-	//		}()
-	//	}
+	// if dmesgs {
+	// 	dmesg("%v: t.linkFiles %v", origin(1), t.linkFiles)
+	// 	defer func() {
+	// 		if err != nil {
+	// 			dmesg("", errorf("", err))
+	// 		}
+	// 	}()
+	// }
 
 	if len(t.inputFiles)+len(t.linkFiles) == 0 {
 		return errorf("no input files")
@@ -228,6 +228,9 @@ func (t *Task) link() (err error) {
 		var object *object
 		switch {
 		case strings.HasPrefix(v, "-l="):
+			// if dmesgs {
+			// 	dmesg("v=%q t.L=%q", v, t.L)
+			// }
 			for _, prefix := range t.L {
 				switch {
 				case strings.HasPrefix(prefix, "/"): // -L/foo/bar
@@ -241,10 +244,17 @@ func (t *Task) link() (err error) {
 					}
 
 					// -Lexample.com/foo
+				case !strings.Contains(prefix, "."): // -Lfoo
+					continue
+				default:
+					// -Lexample.com
 				}
 
 				lib := "lib" + v[len("-l="):]
 				ip := prefix + "/" + lib
+				// if dmesgs {
+				// 	dmesg("lib=%q ip=%q defaultLibs=%q", lib, ip, defaultLibs)
+				// }
 				if prefix == defaultLibs && lib == "libc" {
 					ip = t.libc
 				}
@@ -306,9 +316,9 @@ func (t *Task) link() (err error) {
 }
 
 func (t *Task) getPkgSymbols(importPath string) (r *object, err error) {
-	if dmesgs {
-		dmesg("==== import %q t.goos=%v t.goarch=%v", importPath, t.goos, t.goarch)
-	}
+	// if dmesgs {
+	// 	dmesg("==== import %q t.goos=%v t.goarch=%v", importPath, t.goos, t.goarch)
+	// }
 	// if dmesgs {
 	// 	defer func() {
 	// 		switch {
@@ -585,7 +595,7 @@ type linker struct {
 	textSegmentNameP      string
 	textSegmentOff        int64
 	tld                   nameSpace
-	tldTypes              map[string]struct{ linkName, goName string } // TLD type ID -> info
+	tldTypes              map[string][]struct{ linkName, goName string } // TLD type ID -> info
 	undefsReported        nameSet
 	unsafeName            string
 
@@ -657,7 +667,7 @@ func newLinker(task *Task, libc *object) (*linker, error) {
 		stringLiterals: map[string]int64{},
 		synthDecls:     map[string][]byte{},
 		task:           task,
-		tldTypes:       map[string]struct{ linkName, goName string }{},
+		tldTypes:       map[string][]struct{ linkName, goName string }{},
 	}, nil
 }
 
@@ -702,15 +712,15 @@ func (l *linker) registerLibAliases(obj *object) error {
 }
 
 func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object) (err error) {
-	//	if dmesgs {
-	//		dmesg("packageName=%v inputFiles=%v inputArchives=%v linkFiles=%v", l.task.packageName, l.task.inputFiles, l.task.inputArchives, linkFiles)
-	// 		dmesg("link(%q, %q)", ofn, linkFiles)
-	// 		defer func() {
-	// 			if err != nil {
-	// 				dmesg("", errorf("", err))
-	// 			}
-	//		}()
-	//	}
+	// if dmesgs {
+	// 	dmesg("packageName=%v inputFiles=%v inputArchives=%v linkFiles=%v", l.task.packageName, l.task.inputFiles, l.task.inputArchives, linkFiles)
+	// 	dmesg("link(%q, %q)", ofn, linkFiles)
+	// 	defer func() {
+	// 		if err != nil {
+	// 			dmesg("", errorf("", err))
+	// 		}
+	// 	}()
+	// }
 
 	// ccgo -o libfoo.go libfoo.a
 	handleLibAliases := (l.task.packageName != "" && l.task.packageName != "main") && len(l.task.inputFiles) == 0 && len(l.task.inputArchives) == 1
@@ -965,12 +975,18 @@ var _ %s.Pointer
 		}
 		sort.Strings(linkNames)
 		l.fileLinkNames2GoNames = dict{}
+	outer:
 		for _, linkName := range linkNames {
 			typeID := fileLinkNames2IDs[linkName]
+
+			// collapse aggregate types if they are equal and share the same go name,
+			// e.g. `typedef struct Foo Foo` with `struct Foo`
 			if strings.HasPrefix(typeID, "struct") || strings.HasPrefix(typeID, "[") { // aggregate types
-				if nfo, ok := l.tldTypes[typeID]; ok && nfo.linkName == linkName {
-					l.fileLinkNames2GoNames[linkName] = nfo.goName
-					continue
+				for _, nfo := range l.tldTypes[typeID] {
+					if l.goName(nfo.linkName) == l.goName(linkName) {
+						l.fileLinkNames2GoNames[linkName] = nfo.goName
+						continue outer
+					}
 				}
 			}
 
@@ -981,7 +997,7 @@ var _ %s.Pointer
 			default:
 				l.fileLinkNames2IDs.put(linkName, typeID)
 				goName := l.tld.registerName(l, linkName)
-				l.tldTypes[typeID] = struct{ linkName, goName string }{linkName, goName}
+				l.tldTypes[typeID] = append(l.tldTypes[typeID], struct{ linkName, goName string }{linkName, goName})
 				l.fileLinkNames2GoNames[linkName] = goName
 			}
 		}
@@ -1226,6 +1242,13 @@ func (l *linker) postProcess(fn string, b []byte) (r []byte) {
 					break
 				}
 
+				// fma
+				if k := y.Type().Kind(); k == gc.Float32 || k == gc.Float64 {
+					if z, ok := y.Expr.(*gc.BinaryExpr); ok && z.Op.Ch == '*' {
+						break
+					}
+				}
+
 				y.ConvertType = nil
 			}
 		}
@@ -1313,16 +1336,12 @@ func nodeName(n gc.Node) string {
 			for _, w := range v.IdentifierList {
 				return w.Ident.Src()
 			}
-
-			panic(todo("internal error: %v: %T", n.Position(), n))
 		}
 	case *gc.ConstDecl:
 		for _, v := range x.ConstSpecs {
 			for _, w := range v.IdentifierList {
 				return w.Ident.Src()
 			}
-
-			panic(todo("internal error: %v: %T", n.Position(), n))
 		}
 	case *gc.TypeDecl:
 		for _, v := range x.TypeSpecs {
@@ -1331,22 +1350,11 @@ func nodeName(n gc.Node) string {
 				return y.Ident.Src()
 			case *gc.TypeDef:
 				return y.Ident.Src()
-			default:
-				trc("1334:")
-				panic(todo("internal error: %v: %T %s", n.Position(), n, y.Source(false)))
 			}
-
-			trc("1338:")
-			panic(todo("internal error: %v: %T", n.Position(), n))
 		}
 	case gc.Token:
 		return x.Src()
-	case *gc.Conversion:
-		return ""
 	}
-
-	trc("1345: internal error: %v: %T %s", n.Position(), n, n.Source(false))
-	// panic(todo("internal error: %v: %T", n.Position(), n))
 	return ""
 }
 
@@ -1357,6 +1365,12 @@ func (l *linker) minimizeMain(src *gc.SourceFile, pkg *gc.Package) {
 		tlds[v] = struct{}{}
 		name2tld[nodeName(v)] = v
 	}
+	_, hasMain := name2tld["main"]
+	_, hasWMain := name2tld["wmain"]
+	if !hasMain && !hasWMain {
+		return
+	}
+
 	for _, v := range pkg.Scope.Nodes {
 		tlds[v.Node] = struct{}{}
 		name2tld[nodeName(v.Node)] = v.Node
@@ -1366,7 +1380,7 @@ func (l *linker) minimizeMain(src *gc.SourceFile, pkg *gc.Package) {
 		switch x := v.(type) {
 		case *gc.FunctionDecl:
 			switch x.FunctionName.Src() {
-			case "init", "main":
+			case "init", "main", "wmain":
 				roots = append(roots, x)
 			}
 		default:
@@ -1419,9 +1433,6 @@ func (l *linker) minimizeMain(src *gc.SourceFile, pkg *gc.Package) {
 						if sc := z.LexicalScope(); sc != nil && sc == pkg.Scope {
 							roots = append(roots, z)
 						}
-					default:
-						trc("1394: %v: %T", y.Position(), z)
-						panic(todo(""))
 					}
 				case *gc.TypeNameNode:
 					switch z := y.Name.ResolvedTo().(type) {
@@ -1431,9 +1442,6 @@ func (l *linker) minimizeMain(src *gc.SourceFile, pkg *gc.Package) {
 						if sc := z.LexicalScope(); sc != nil && sc == pkg.Scope {
 							roots = append(roots, z)
 						}
-					default:
-						trc("1405: %v: %q %T", z.Position(), y.Name.Source(false), z)
-						panic(todo(""))
 					}
 				case *gc.QualifiedIdent:
 					if y.PackageName.IsValid() {
@@ -1451,9 +1459,6 @@ func (l *linker) minimizeMain(src *gc.SourceFile, pkg *gc.Package) {
 						if sc := z.LexicalScope(); sc != nil && sc == pkg.Scope {
 							roots = append(roots, z)
 						}
-					default:
-						trc("1426: %v: %q %T", y.Position(), y.Source(false), z)
-						panic(todo(""))
 					}
 				case gc.Token:
 					nm := y.Src()
@@ -1464,13 +1469,6 @@ func (l *linker) minimizeMain(src *gc.SourceFile, pkg *gc.Package) {
 					if n, ok := name2tld[nm]; ok {
 						roots = append(roots, n)
 					}
-					// case *gc.Block, *gc.BasicLit, *gc.Conversion, *gc.Selector, *gc.Arguments, *gc.ExprListItem,
-					// 	*gc.UnaryExpr, *gc.ParenExpr, *gc.ReturnStmt, *gc.ExpressionStmt, *gc.CompositeLit,
-					// 	*gc.LiteralValue, *gc.KeyedElement:
-
-					// 	// ok
-					// case gc.Node:
-					// 	trc("1443: %v: %T %q %s", y.Position(), y, nodeName(y), y.Source(false))
 				}
 			}
 		})

@@ -19,7 +19,7 @@ func (c *ctx) typedef(n cc.Node, t cc.Type) string {
 	return b.String()
 }
 
-func (c *ctx) helper(n cc.Node, t cc.Type) string {
+func (c *ctx) helper(n cc.Node, t cc.Type) (r string) {
 	var b strings.Builder
 	if t.Kind() == cc.Enum {
 		t = t.(*cc.EnumType).UnderlyingType()
@@ -81,25 +81,29 @@ func (c *ctx) typ0(b *strings.Builder, n cc.Node, t cc.Type, useTypenames, useTa
 	}
 
 	switch x := t.(type) {
-	case *cc.PointerType, *cc.FunctionType:
+	case *cc.FunctionType:
+		b.WriteString(tag(preserve))
+		b.WriteString("__ccgo")
+	case *cc.PointerType:
 		b.WriteString(tag(preserve))
 		b.WriteString("uintptr")
 	case *cc.PredefinedType:
+		sz := t.Size()
 		if t.VectorSize() > 0 {
-			c.err(errorf("TODO vector"))
-			return
+			sz = c.ast.ABI.Types[t.Kind()].Size
+			fmt.Fprintf(b, "[%v]", t.VectorSize()/sz)
 		}
 
 		switch {
 		case cc.IsIntegerType(t):
 			switch {
-			case t.Size() <= 8:
+			case sz <= 8:
 				b.WriteString(tag(preserve))
 				if !cc.IsSignedInteger(t) {
 					b.WriteByte('u')
 				}
-				fmt.Fprintf(b, "int%d", 8*t.Size())
-			case t.Size() == 16:
+				fmt.Fprintf(b, "int%d", 8*sz)
+			case sz == 16:
 				fmt.Fprintf(b, "[2]%suint64", tag(preserve))
 			default:
 				b.WriteString(tag(preserve))
@@ -109,45 +113,45 @@ func (c *ctx) typ0(b *strings.Builder, n cc.Node, t cc.Type, useTypenames, useTa
 		case t.Kind() == cc.Void:
 			b.WriteString("struct{}")
 		case t.Kind() == cc.Float:
-			if t.Size() != 4 {
-				c.err(errorf("C %v of unexpected size %d", x.Kind(), t.Size()))
+			if sz != 4 {
+				c.err(errorf("%v: C %v of unexpected size %d", n.Position(), x.Kind(), sz))
 			}
 			b.WriteString(tag(preserve))
 			b.WriteString("float32")
 		case t.Kind() == cc.Double:
-			if t.Size() != 8 {
-				c.err(errorf("C %v of unexpected size %d", x.Kind(), t.Size()))
+			if sz != 8 {
+				c.err(errorf("C %v of unexpected size %d", x.Kind(), sz))
 			}
 			b.WriteString(tag(preserve))
 			b.WriteString("float64")
 		case t.Kind() == cc.LongDouble:
-			if t.Size() != 8 {
-				c.err(errorf("C %v of unexpected size %d", x.Kind(), t.Size()))
+			if sz != 8 {
+				c.err(errorf("C %v of unexpected size %d", x.Kind(), sz))
 			}
-			switch t.Size() {
+			switch sz {
 			case 8:
 				b.WriteString(tag(preserve))
 				b.WriteString("float64")
 			case 16:
 				fmt.Fprintf(b, "[2]%suint64", tag(preserve))
 			default:
-				c.err(errorf("C %v of unexpected size %d", x.Kind(), t.Size()))
+				c.err(errorf("C %v of unexpected size %d", x.Kind(), sz))
 			}
 		case t.Kind() == cc.ComplexFloat:
-			if t.Size() != 8 {
-				c.err(errorf("C %v of unexpected size %d", x.Kind(), t.Size()))
+			if sz != 8 {
+				c.err(errorf("C %v of unexpected size %d", x.Kind(), sz))
 			}
 			b.WriteString(tag(preserve))
 			b.WriteString("complex64")
 		case t.Kind() == cc.ComplexDouble:
-			if t.Size() != 16 {
-				c.err(errorf("C %v of unexpected size %d", x.Kind(), t.Size()))
+			if sz != 16 {
+				c.err(errorf("C %v of unexpected size %d", x.Kind(), sz))
 			}
 			b.WriteString(tag(preserve))
 			b.WriteString("complex128")
 		case t.Kind() == cc.ComplexLongDouble:
-			if t.Size() != 16 {
-				c.err(errorf("%v: C %v of unexpected size %d", pos(n), x.Kind(), t.Size()))
+			if sz != 16 {
+				c.err(errorf("%v: C %v of unexpected size %d", pos(n), x.Kind(), sz))
 			}
 			b.WriteString(tag(preserve))
 			b.WriteString("complex128")
@@ -735,6 +739,8 @@ func typeID0(b *strings.Builder, in map[string]gc.Node, out map[string]string, t
 		default:
 			panic(todo("%T %s", x, x.Source(true)))
 		}
+	case *gc.FunctionTypeNode:
+		b.WriteString("uintptr")
 	default:
 		panic(todo("%T %s", x, x.Source(false)))
 	}

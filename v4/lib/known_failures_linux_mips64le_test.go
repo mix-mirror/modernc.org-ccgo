@@ -24,6 +24,8 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/github.com/vnmakarov/mir/c-tests/new/setjmp.c`:                                              {}, // EXEC FAIL: "assets/github.com/vnmakarov/mir/c-tests/new/setjmp.c: libc.go:2142:Xlongjmp: TODOTODO "
 	`assets/github.com/vnmakarov/mir/c-tests/new/setjmp2.c`:                                             {}, // EXEC FAIL: "assets/github.com/vnmakarov/mir/c-tests/new/setjmp2.c: libc.go:2142:Xlongjmp: TODOTODO "
 
+	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr36093.c`: {}, // EXEC FAIL: assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr36093.c: panic: 544
+
 	// ==== BUILD FAIL - compiles but does not build.
 
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/alias-3.c`:                 {}, // BUILD FAIL: "exit status 1"
@@ -552,4 +554,6 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/tcc-0.9.27/tests/tests2/87_dead_code.c`:                                             {}, // COMPILE FAIL: "\"87_dead_code.c: gofmt: exit status 2 (.:0:: asm_mips64x.s:648:goexit: asm_mips64x.s:648:goexit: asm_mips64x.s:648:goexit: compile.go:495:compile: compile.go:495:compile:)\""
 	`assets/tcc-0.9.27/tests/tests2/95_bitfields.c`:                                             {}, // COMPILE FAIL: "\"95_bitfields.c:27:5: unsupported alignment 16 of char (expr.go:101:expr: expr.go:543:expr0: expr.go:1672:unaryExpression: type.go:395:isValidType: type.go:407:isValidType: type.go:426:isValidType1:)\""
 	`assets/tcc-0.9.27/tests/tests2/95_bitfields_ms.c`:                                          {}, // COMPILE FAIL: "\"95_bitfields.c:27:5: unsupported alignment 16 of char (expr.go:101:expr: expr.go:543:expr0: expr.go:1672:unaryExpression: type.go:395:isValidType: type.go:407:isValidType: type.go:426:isValidType1:)\""
+
+	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr36093.c`: {}, // EXEC FAIL: assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr36093.c: panic: 544
 }

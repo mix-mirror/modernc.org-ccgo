@@ -84,7 +84,8 @@ type fnCtx struct {
 	tlsAllocs        int64
 	vlaSizes         map[*cc.Declarator]string
 
-	nextID int
+	inDefer int
+	nextID  int
 
 	callsAlloca bool
 }
@@ -196,6 +197,19 @@ func (f *fnCtx) registerLocal(d *cc.Declarator) {
 	f.locals[d] = ""
 }
 
+func (f *fnCtx) isFuncPtr(n cc.Node, t cc.Type) (r bool, ft *cc.FunctionType) {
+	for {
+		switch x := t.(type) {
+		case *cc.PointerType:
+			t = x.Elem()
+		case *cc.FunctionType:
+			return true, x
+		default:
+			return false, nil
+		}
+	}
+}
+
 func (f *fnCtx) renameLocals() {
 	var a []*cc.Declarator
 	for k := range f.locals {
@@ -215,7 +229,13 @@ func (f *fnCtx) renameLocals() {
 	})
 	var r nameRegister
 	for _, d := range a {
-		f.locals[d] = r.put(f.c.declaratorTag(d) + d.Name())
+		nm := d.Name()
+		if d.IsParam() {
+			if ok, _ := f.isFuncPtr(d, d.Type()); ok {
+				nm = ccgoFuncParam + nm
+			}
+		}
+		f.locals[d] = r.put(f.c.declaratorTag(d) + nm)
 	}
 }
 
@@ -393,6 +413,20 @@ func (c *ctx) functionDefinition0(w writer, sep string, pos cc.Node, d *cc.Decla
 			c.f.t = cft
 		}
 	}()
+
+	if d.Linkage() == cc.External {
+		// emit func ptr signatures, if any
+		nm := d.Name()
+		if alias != "" {
+			nm = alias
+		}
+		for i, v := range ft.Parameters() {
+			if _, ft := c.f.isFuncPtr(v, v.Type()); ft != nil {
+				w.w("\n\ntype %s%s_%s%s_%v = func%s\n\n", tag(typename), ccgoFuncParam, c.declaratorTag(d), nm, i, c.signature(ft, false, false, false))
+			}
+		}
+	}
+
 	c.pass = 1
 	for _, v := range ft.Parameters() {
 		if v.Declarator != nil {
@@ -1293,7 +1327,17 @@ func (c *ctx) initDeclaratorInit(w writer, sep string, info *declInfo, d *cc.Dec
 				case cc.IsScalarType(t) && initializer.AssignmentExpression != nil && c.isZero(initializer.AssignmentExpression.Value()):
 					w.w("%s%svar %s %s;", sep, c.posComment(d), linkName, c.typ(d, t))
 				default:
-					w.w("%s%svar %s = %s;", sep, c.posComment(d), linkName, c.initializerOuter(w, initializer, t))
+					switch {
+					case c.task.doom:
+						// A temporary workaround for the cyclic initializer problem. Does not pass
+						// tests, but works for doomgeneric.
+						w.w("%s%svar %s %s;", sep, c.posComment(d), linkName, c.typ(d, t))
+						w.w("\n\nfunc init() {")
+						w.w("%s = %s;", linkName, c.initializerOuter(w, initializer, t))
+						w.w("\n}\n")
+					default:
+						w.w("%s%svar %s = %s;", sep, c.posComment(d), linkName, c.initializerOuter(w, initializer, t))
+					}
 				}
 			default:
 				if c.unbracedInitilizer(initializer).Case != cc.InitializerExpr {

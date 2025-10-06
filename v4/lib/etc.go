@@ -747,7 +747,7 @@ func nodeSource(n cc.Node) string {
 	return strings.Trim(b.String(), "\n")
 }
 
-func sep(n cc.Node) (r string) {
+func sep(n cc.Node, dflt ...string) (r string) {
 	var t cc.Token
 	firstToken(n, &t)
 	r = string(t.Sep())
@@ -759,7 +759,10 @@ func sep(n cc.Node) (r string) {
 	default:
 		r = string(t.Sep())
 	}
-	return strings.ReplaceAll(r, "\f", "\n")
+	if r = strings.ReplaceAll(r, "\f", "\n"); r == "" {
+		r = strings.Join(dflt, "")
+	}
+	return r
 }
 
 func firstToken(n cc.Node, r *cc.Token) {

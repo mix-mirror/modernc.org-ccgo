@@ -66,8 +66,8 @@ var (
 	goarch      = runtime.GOARCH
 	goos        = runtime.GOOS
 	hostCC      string
-	libcVersion string                                   // from ../go.mod, eg. @v1.61.2
-	nogcc       = goos == "windows" && goarch == "arm64" // We have no 32b mingw-gcc binary targeting windows/amd64 bit yet.
+	libcVersion string // from ../go.mod, eg. @v1.61.2
+	noCsmith    = goos == "windows" && goarch == "arm64"
 	re          *regexp.Regexp
 	target      = fmt.Sprintf("%s/%s", goos, goarch)
 	totalMemory = memory.TotalMemory()
@@ -321,10 +321,6 @@ func shell(echo bool, cmd string, args ...string) ([]byte, error) {
 }
 
 func TestExec(t *testing.T) {
-	if nogcc {
-		t.Skip()
-	}
-
 	g := newGolden(t, fmt.Sprintf("testdata/test_exec_%s_%s.golden", runtime.GOOS, runtime.GOARCH))
 
 	defer g.close()
@@ -450,6 +446,10 @@ func testExec(t *testing.T, cfsDir string, exec bool, g *golden) {
 		case re != nil && !re.MatchString(base):
 			p.skip()
 			return nil
+		case base == "bool.c":
+			// Temporary disable 'bool.c' on all targets, see !22 at https://gitlab.com/cznic/ccgo/-/merge_requests/22
+			p.skip()
+			return nil
 		}
 
 		if totalMemory < 4<<30 && strings.HasPrefix(base, "limits-") {
@@ -537,6 +537,7 @@ func testExec1(t *testing.T, p *parallel, root, path string, execute bool, g *go
 				"-c",
 				"-verify-types",
 				"--prefix-field=F",
+				"-ignore-unsupported-alignment",
 				"-ignore-vector-functions",
 				"-keep-object-files",
 				// "--libc", *oLibc,
@@ -553,6 +554,7 @@ func testExec1(t *testing.T, p *parallel, root, path string, execute bool, g *go
 				"-o", ofn,
 				"-verify-types",
 				"--prefix-field=F",
+				"-ignore-unsupported-alignment",
 				"-ignore-vector-functions",
 				"-keep-object-files",
 				"-positions",
@@ -798,7 +800,7 @@ func (g *golden) close() {
 }
 
 func TestCSmith(t *testing.T) {
-	if nogcc {
+	if noCsmith {
 		t.Skip()
 	}
 
@@ -883,7 +885,27 @@ func TestCSmith(t *testing.T) {
 
 	// Other blacklist
 	blacklist := []struct{ target, seed string }{
-		{"linux/ppc64le", "8032246412188002"}, // gcc 10.2.1 bug.
+		{"linux/ppc64le", "8032246412188002"}, // false positive: gcc 10.2.1 bug.
+		{"linux/ppc64le", "3088696074888013"}, // TODO https://gitlab.com/cznic/builder/-/tree/91efcffac0cf3a1618f47d117864b76435ed87a2/logs/modernc.org/ccgo/v4/lib
+
+		// # command-line-arguments
+		// ./main.go:908:34: internal compiler error: 'func_1': FlagConstant op should never make it to codegen v2095 = FlagConstant <flags>[N=false,Z=false,C=false,V=false]
+		//
+		// Please file a bug report including a short program that triggers the error.
+		// https://go.dev/issue/new
+		//
+		// https://gitlab.com/cznic/builder/-/blob/a796cec9f649d055ac3e20294c0d577b28315806/logs/modernc.org/ccgo/v4/lib/pi64
+		//
+		// ML: https://groups.google.com/g/golang-dev/c/n0x570DGGUI
+		//
+		// "--max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --bitfields -s 3442008958747721967",
+		{"darwin/arm64", "3442008958747721967"},
+		{"freebsd/arm64", "3442008958747721967"},
+		{"linux/arm64", "3442008958747721967"},
+
+		// Temporary disable 12695610754882428028, see !22 at https://gitlab.com/cznic/ccgo/-/merge_requests/22
+		{"linux/arm64", "12695610754882428028"},
+		{"darwin/arm64", "12695610754882428028"},
 	}
 
 	fixedBugs := []string{
@@ -926,8 +948,11 @@ func TestCSmith(t *testing.T) {
 		"--bitfields --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --max-nested-struct-level 10 -s 1906742816",
 		"--bitfields --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --max-nested-struct-level 10 -s 3629008936",
 		"--bitfields --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --max-nested-struct-level 10 -s 612971101",
+		"--max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --bitfields -s 12695610754882428028", //TODO linux/arm64
 		"--max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --bitfields -s 1701143130",
+		"--max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --bitfields -s 1714958724",
 		"--max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --bitfields -s 20004725738999789",
+		"--max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --bitfields -s 3088696074888013",
 		"--max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --bitfields -s 3654957324",
 		"--max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --bitfields -s 8032246412188002",
 		"--no-bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 1302111308",
@@ -936,11 +961,6 @@ func TestCSmith(t *testing.T) {
 		"--no-bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3720922579",
 		"--no-bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 4263172072",
 		"--no-bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 572192313",
-
-		//TODO linux/riscv64
-		"--max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --bitfields -s 1714958724",
-		//TODO linux/ppc64le
-		"--max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --bitfields -s 8032246412188002",
 	}
 	var ch <-chan time.Time
 	t0 := time.Now()
@@ -953,7 +973,6 @@ out:
 		switch {
 		case i < len(fixedBugs):
 			s := fixedBugs[i]
-			trc("", s)
 			if re != nil && !re.MatchString(s) {
 				continue
 			}

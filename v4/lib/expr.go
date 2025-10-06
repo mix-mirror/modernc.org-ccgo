@@ -31,8 +31,19 @@ const (
 )
 
 const (
+	// The name of the function that converts a Go func into an ccgo ABI C function
+	// code pointer (Go internal ABI). Considering
+	//
+	//	func f() {}
+	//
+	//	__ccgo_fp(f) // returns the C function pointer
 	ccgoFP = "__ccgo_fp"
-	ccgoTS = "__ccgo_ts"
+	// The Go parameter name prefix reserved for __ccgo_fp-produced values.
+	// Supports 'Go ABI0' vs 'Go ABI internal' handling. The parameter type is
+	// still uintptr for backward compatibility. Only the parameter name is now
+	// enforced. Poor man's type annotation.
+	ccgoFuncParam = "__ccgo_fp_"
+	ccgoTS        = "__ccgo_ts"
 )
 
 var (
@@ -127,11 +138,11 @@ func (c *ctx) convert(n cc.ExpressionNode, w writer, s *buf, from, to cc.Type, f
 	}
 
 	if assert && fromMode == exprUintptr && from.Kind() != cc.Ptr && from.Kind() != cc.Function {
-		trc("%v: %v %v -> %v %v", c.pos(n), from, fromMode, to, toMode)
+		// trc("%v: %v %v -> %v %v", c.pos(n), from, fromMode, to, toMode)
 		c.err(errorf("TODO assertion failed"))
 	}
 	if assert && toMode == exprUintptr && to.Kind() != cc.Ptr {
-		trc("%v: %v %v -> %v %v", c.pos(n), from, fromMode, to, toMode)
+		// trc("%v: %v %v -> %v %v", c.pos(n), from, fromMode, to, toMode)
 		c.err(errorf("TODO assertion failed"))
 	}
 	if from != nil && from.Kind() == cc.Enum {
@@ -346,8 +357,14 @@ func (c *ctx) convertType(n cc.ExpressionNode, s *buf, from, to cc.Type, fromMod
 		case to.Kind() == cc.UInt128:
 			//TODO
 		default:
+			if to.Kind() == cc.Bool {
+				var b buf
+				b.w("(%s%sBool%s((%s) != 0))", c.task.tlsQualifier, tag(preserve), c.helper(n, from), s)
+				s = &b
+			}
+
 			switch {
-			case cc.IsIntegerType(from) && cc.IsIntegerType(to) && (cc.IsSignedInteger(from) != cc.IsSignedInteger(to)):
+			case cc.IsIntegerType(from) && cc.IsIntegerType(to) && (cc.IsSignedInteger(from) != cc.IsSignedInteger(to)) && c.task.goos != "windows":
 				b.w("(%s%s%sFrom%s(%s))", c.task.tlsQualifier, tag(preserve), c.helper(n, to), c.helper(n, from), s)
 			case !cc.IsComplexType(from) && !cc.IsComplexType(to):
 				b.w("(%s(%s))", c.verifyTyp(n, to), s)
@@ -377,7 +394,7 @@ func (c *ctx) convertType(n cc.ExpressionNode, s *buf, from, to cc.Type, fromMod
 
 	c.err(errorf("%v: TODO %q from=%s %v %v %v -> to=%s %v %v %v (%v:)", pos(n), s, from, from.Kind(), from.Size(), fromMode, to, to.Kind(), to.Size(), toMode, c.pos(n)))
 	// panic(todo("")) //TODO-DBG
-	//trc("", errorf("ERROR %q %s %s -> %s %s (%v:)", s, from, fromMode, to, toMode, c.pos(n))) //TODO-DBG
+	// trc("", errorf("ERROR %q %s %s -> %s %s (%v:)", s, from, fromMode, to, toMode, c.pos(n))) //TODO-DBG
 	return s //TODO
 }
 
@@ -1156,7 +1173,17 @@ func (c *ctx) multiplicativeExpression(w writer, n *cc.MultiplicativeExpression,
 		c.err(errorf("TODO %v", n.Case))
 	case cc.MultiplicativeExpressionMul: // MultiplicativeExpression '*' CastExpression
 		x, y := c.binopArgs(w, n.MultiplicativeExpression, n.CastExpression, n.Type())
-		b.w("(%s * %s)", x, y)
+		disbleFMA := true
+		switch c.task.target {
+		case "freebsd/arm64":
+			disbleFMA = false
+		}
+		switch {
+		case disbleFMA && cc.IsFloatingPointType(t):
+			b.w("(%s(%s * %s))", c.typ(n, t), x, y)
+		default:
+			b.w("(%s * %s)", x, y)
+		}
 	case cc.MultiplicativeExpressionDiv: // MultiplicativeExpression '/' CastExpression
 		x, y := c.binopArgs(w, n.MultiplicativeExpression, n.CastExpression, n.Type())
 		b.w("(%s / %s)", x, y)
@@ -1493,7 +1520,9 @@ out:
 					break
 				}
 
-				b.w("%s++", c.expr(w, n.UnaryExpression, nil, exprDefault))
+				ds := c.expr(w, n.UnaryExpression, nil, exprDefault)
+				b.w("%s = %s;", ds, c.exprWrap(t, "%s+1", ds))
+
 			case exprDefault:
 				if c.isVolatileOrAtomicExpr(n.UnaryExpression) {
 					bp := c.expr(w, n.UnaryExpression, n.UnaryExpression.Type().Pointer(), exprUintptr)
@@ -1506,15 +1535,16 @@ out:
 				case d != nil:
 					v := c.f.newAutovar(n, n.UnaryExpression.Type())
 					ds := c.expr(w, n.UnaryExpression, nil, exprDefault)
-					w.w("%s++;", ds)
+					w.w("%s = %s;", ds, c.exprWrap(t, "%s+1", ds))
 					w.w("\n%s = %s;", v, ds)
 					b.w("%s", v)
 				default:
 					v := c.f.newAutovar(n, n.UnaryExpression.Type())
 					v2 := c.f.newAutovar(n, n.UnaryExpression.Type().Pointer())
+					ds := fmt.Sprintf("(*(*%s)(%s))", c.typ(n, n.UnaryExpression.Type()), unsafePointer(v2))
 					w.w("%s = %s;", v2, c.expr(w, n.UnaryExpression, n.UnaryExpression.Type().Pointer(), exprUintptr))
-					w.w("(*(*%s)(%s))++;", c.typ(n, n.UnaryExpression.Type()), unsafePointer(v2))
-					w.w("%s = (*(*%s)(%s));", v, c.typ(n, n.UnaryExpression.Type()), unsafePointer(v2))
+					w.w("%s = %s;", ds, c.exprWrap(t, "%s+1", ds))
+					w.w("%s = %s;", v, ds)
 					b.w("%s", v)
 				}
 			default:
@@ -1564,7 +1594,8 @@ out:
 					break
 				}
 
-				b.w("%s--", c.expr(w, n.UnaryExpression, nil, exprDefault))
+				ds := c.expr(w, n.UnaryExpression, nil, exprDefault)
+				b.w("%s = %s;", ds, c.exprWrap(t, "%s-1", ds))
 			case exprDefault:
 				if c.isVolatileOrAtomicExpr(n.UnaryExpression) {
 					bp := c.expr(w, n.PostfixExpression, n.UnaryExpression.Type().Pointer(), exprUintptr)
@@ -1577,15 +1608,16 @@ out:
 				case d != nil:
 					v := c.f.newAutovar(n, n.UnaryExpression.Type())
 					ds := c.expr(w, n.UnaryExpression, nil, exprDefault)
-					w.w("%s--;", ds)
+					w.w("%s = %s;", ds, c.exprWrap(t, "%s-1", ds))
 					w.w("\n%s = %s;", v, ds)
 					b.w("%s", v)
 				default:
 					v := c.f.newAutovar(n, n.UnaryExpression.Type())
 					v2 := c.f.newAutovar(n, n.UnaryExpression.Type().Pointer())
+					ds := fmt.Sprintf("(*(*%s)(%s))", c.typ(n, n.UnaryExpression.Type()), unsafePointer(v2))
 					w.w("%s = %s;", v2, c.expr(w, n.UnaryExpression, n.UnaryExpression.Type().Pointer(), exprUintptr))
-					w.w("(*(*%s)(%s))--;", c.typ(n, n.UnaryExpression.Type()), unsafePointer(v2))
-					w.w("%s = (*(*%s)(%s));", v, c.typ(n, n.UnaryExpression.Type()), unsafePointer(v2))
+					w.w("%s = %s;", ds, c.exprWrap(t, "%s-1", ds))
+					w.w("%s = %s;", v, ds)
 					b.w("%s", v)
 				}
 			default:
@@ -1594,11 +1626,35 @@ out:
 		}
 	case cc.UnaryExpressionAddrof: // '&' CastExpression
 		// trc("%v: nt %v, ct %v, '%s' %v", n.Token.Position(), n.Type(), n.CastExpression.Type(), cc.NodeSource(n), mode)
-		switch n.Type().Undecay().(type) {
+		switch x := n.Type().Undecay().(type) {
 		case *cc.FunctionType:
 			rt, rmode = n.Type(), mode
 			b.w("%s", c.expr(w, n.CastExpression, nil, mode))
 			break out
+		case *cc.PointerType:
+			switch x.Elem().(type) {
+			case *cc.FunctionType:
+				d := c.declaratorOf(n.CastExpression)
+				if d == nil {
+					break
+				}
+
+				// Linker does not yet handle weakly linked functions. A special case is
+				// handled here so it should be backward compatible with:
+				//
+				//  - The definition in cc, 'int __darwin_check_fd_set_overflow(int, void *,
+				//    int);' lacks the weak attribute
+				//
+				//  - The definition in libc 'var X__darwin_check_fd_set_overflow uintptr'
+				//    should not exist in the first place, but we cannot remove it without
+				//    breaking existing code.
+				switch d.Name() {
+				case "__darwin_check_fd_set_overflow":
+					rt, rmode = n.Type(), mode
+					b.w("(0)")
+					break out
+				}
+			}
 		}
 
 		rt, rmode = n.Type(), exprUintptr
@@ -2011,6 +2067,10 @@ out:
 		c.err(errorf("TODO %v", n.Case))
 	case cc.PostfixExpressionCall: // PostfixExpression '(' ArgumentExpressionList ')'
 		switch c.declaratorOf(n.PostfixExpression).Name() {
+		case "__darwin_check_fd_set_overflow": // See coments at unaryExpression()
+			b.w("(1)")
+			rt, rmode = n.Type(), mode
+			break out
 		case
 			"__builtin_constant_p",
 			"__ccgo__types_compatible_p":
@@ -2052,9 +2112,13 @@ out:
 			rt, rmode = n.Type(), mode
 			w.w("%s_ = %s;", tag(preserve), c.expr(w, n.ArgumentExpressionList.AssignmentExpression, nil, exprDefault))
 			break out
-		case "__atomic_load_n":
+		case
+			"__atomic_load_n",
+			"__c11_atomic_load_n":
 			return c.atomicLoadN(w, n, t, mode)
-		case "__atomic_store_n":
+		case
+			"__atomic_store_n",
+			"__c11_atomic_store_n":
 			return c.atomicStoreN(w, n, t, mode)
 		case "__builtin_sub_overflow":
 			return c.subOverflow(w, n, t, mode)
@@ -2082,11 +2146,17 @@ out:
 			return &b, c.ast.Void, mode
 		case
 			"__atomic_fetch_add",
-			"__atomic_fetch_sub",
 			"__atomic_fetch_and",
-			"__atomic_fetch_xor",
+			"__atomic_fetch_nand",
 			"__atomic_fetch_or",
-			"__atomic_fetch_nand":
+			"__atomic_fetch_sub",
+			"__atomic_fetch_xor",
+			"__c11_atomic_fetch_add",
+			"__c11_atomic_fetch_and",
+			"__c11_atomic_fetch_nand",
+			"__c11_atomic_fetch_or",
+			"__c11_atomic_fetch_sub",
+			"__c11_atomic_fetch_xor":
 			// type __atomic_fetch_add (type *ptr, type val, int memorder)
 			return c.stdatomicFetchAdd(w, n, t, mode)
 		case
@@ -2095,12 +2165,23 @@ out:
 			// void __atomic_load (type *ptr, type *ret, int memorder)
 			// void __atomic_store (type *ptr, type *val, int memorder)
 			return c.stdatomicLoad(w, n, t, mode)
+		case "__c11_atomic_load":
+			return c.c11AtomicLoad(w, n, t, mode)
+		case "__c11_atomic_store":
+			return c.c11AtomicStore(w, n, t, mode)
 		case "__atomic_exchange":
 			// void __atomic_exchange (type *ptr, type *val, type *ret, int memorder)
 			return c.stdatomicExchange(w, n, t, mode)
+		case "__c11_atomic_exchange":
+			return c.c11AtomicExchange(w, n, t, mode)
 		case "__atomic_compare_exchange":
 			// bool __atomic_compare_exchange (type *ptr, type *expected, type *desired, bool weak, int success_memorder, int failure_memorder)
 			return c.stdatomicCompareExchange(w, n, c.ast.Int, mode)
+		case "__sync_val_compare_and_swap":
+			// type __sync_val_compare_and_swap (type *ptr, type oldval type newval, ...)
+			return c.syncValCompareAndSwap(w, n, t, mode)
+		case "__c11_atomic_compare_exchange_strong":
+			return c.c11AtomicCompareExchange(w, n, c.ast.Int, mode)
 		}
 
 		switch mode {
@@ -2109,9 +2190,9 @@ out:
 			case *cc.StructType:
 				return c.postfixExpressionCall(w, n, mode)
 			case *cc.UnionType:
-				v := fmt.Sprintf("%sv%d", tag(ccgoAutomatic), c.id())
+				v := c.f.newAutovar(n, n.Type())
 				e, _, _ := c.postfixExpressionCall(w, n, mode)
-				w.w("%s := %s;", v, e)
+				w.w("%s = %s;", v, e)
 				b.w("%s", v)
 				return &b, n.Type(), mode
 			}
@@ -2134,6 +2215,7 @@ out:
 			switch mode {
 			case exprVoid:
 				b.w("%s += %d", c.expr(w, n.PostfixExpression, nil, exprDefault), sz)
+
 			case exprDefault, exprUintptr:
 				v := c.f.newAutovar(n, n.PostfixExpression.Type())
 				switch d := c.declaratorOf(n.PostfixExpression); {
@@ -2168,7 +2250,8 @@ out:
 					break
 				}
 
-				b.w("%s++", c.expr(w, n.PostfixExpression, nil, exprDefault))
+				ds := c.expr(w, n.PostfixExpression, nil, exprDefault)
+				b.w("%s=%s;", ds, c.exprWrap(t, "%s+1", ds))
 			case exprDefault:
 				if c.isVolatileOrAtomicExpr(n.PostfixExpression) {
 					bp := c.expr(w, n.PostfixExpression, d.Type().Pointer(), exprUintptr)
@@ -2182,14 +2265,27 @@ out:
 				case d != nil:
 					ds := c.expr(w, n.PostfixExpression, nil, exprDefault)
 					w.w("%s = %s;", v, ds)
-					w.w("%s++;", ds)
+					w.w("%s = %s;", ds, c.exprWrap(t, "%s+1", ds))
 					b.w("%s", v)
 				default:
 					v2 := c.f.newAutovar(n, n.PostfixExpression.Type().Pointer())
+					ds := fmt.Sprintf("(*(*%s)(%s))", c.typ(n, n.PostfixExpression.Type()), unsafePointer(v2))
 					w.w("%s = %s;", v2, c.expr(w, n.PostfixExpression, n.PostfixExpression.Type().Pointer(), exprUintptr))
-					w.w("%s = (*(*%s)(%s));", v, c.typ(n, n.PostfixExpression.Type()), unsafePointer(v2))
-					w.w("(*(*%s)(%s))++;", c.typ(n, n.PostfixExpression.Type()), unsafePointer(v2))
+					w.w("%s = %s;", v, ds)
+					w.w("%s = %s;", ds, c.exprWrap(t, "%s+1", ds))
 					b.w("%s", v)
+				}
+			case exprUintptr:
+				switch {
+				case d != nil:
+					sz := pe.(*cc.PointerType).Elem().Undecay().Size()
+					v := c.f.newAutovar(n, n.PostfixExpression.Type())
+					ds := c.expr(w, n.PostfixExpression, nil, exprDefault)
+					w.w("%s = %s;", v, ds)
+					w.w("%s += %d;", ds, sz)
+					b.w("%s", v)
+				default:
+					c.err(errorf("TODO %v", mode)) // -
 				}
 			default:
 				c.err(errorf("TODO %v", mode)) // -
@@ -2235,7 +2331,8 @@ out:
 					break
 				}
 
-				b.w("%s--", c.expr(w, n.PostfixExpression, nil, exprDefault))
+				ds := c.expr(w, n.PostfixExpression, nil, exprDefault)
+				b.w("%s = %s;", ds, c.exprWrap(t, "%s-1", ds))
 			case exprDefault:
 				if c.isVolatileOrAtomicExpr(n.PostfixExpression) {
 					bp := c.expr(w, n.PostfixExpression, n.PostfixExpression.Type().Pointer(), exprUintptr)
@@ -2249,13 +2346,14 @@ out:
 				case d != nil:
 					ds := c.expr(w, n.PostfixExpression, nil, exprDefault)
 					w.w("%s = %s;", v, ds)
-					w.w("%s--;", ds)
+					w.w("%s = %s;", ds, c.exprWrap(t, "%s-1", ds))
 					b.w("%s", v)
 				default:
 					v2 := c.f.newAutovar(n, n.PostfixExpression.Type().Pointer())
+					ds := fmt.Sprintf("(*(*%s)(%s))", c.typ(n, n.PostfixExpression.Type()), unsafePointer(v2))
 					w.w("%s = %s;", v2, c.expr(w, n.PostfixExpression, n.PostfixExpression.Type().Pointer(), exprUintptr))
-					w.w("%s = (*(*%s)(%s));", v, c.typ(n, n.PostfixExpression.Type()), unsafePointer(v2))
-					w.w("(*(*%s)(%s))--;", c.typ(n, n.PostfixExpression.Type()), unsafePointer(v2))
+					w.w("%s = %s;", v, ds)
+					w.w("%s = %s;", ds, c.exprWrap(t, "%s-1", ds))
 					b.w("%s", v)
 				}
 			default:
@@ -2438,7 +2536,7 @@ func (c *ctx) objectSize(w writer, n *cc.PostfixExpression, t cc.Type, mode mode
 
 	switch k {
 	case 0, 1:
-		b.w("(^%s__predefined_size_t(0))", tag(preserve))
+		b.w("(^%s__predefined_size_t(0))", tag(typename))
 	default:
 		b.w("(0)")
 	}
@@ -2661,6 +2759,70 @@ func (c *ctx) stdatomicLoad(w writer, n *cc.PostfixExpression, t cc.Type, mode m
 	return &b, c.void, exprVoid
 }
 
+func (c *ctx) c11AtomicStore(w writer, n *cc.PostfixExpression, t cc.Type, mode mode) (r *buf, rt cc.Type, rmode mode) {
+	var b buf
+	args := argumentExpressionList(n.ArgumentExpressionList)
+	if len(args) != 3 {
+		c.err(errorf("%v: invalid number of arguments to atomic operation, expected 3, got %v", n.ArgumentExpressionList.Position(), len(args)))
+		return &b, t, mode
+	}
+
+	pt := args[0].Type()
+	if pt.Kind() != cc.Ptr {
+		c.err(errorf("%v: invalid first argument to atomic operation: %s", n.ArgumentExpressionList.Position(), args[0].Type()))
+		return &b, t, mode
+	}
+
+	var tls string
+	switch {
+	case c.f == nil:
+		tls = fmt.Sprintf("%snil", tag(preserve))
+	default:
+		tls = fmt.Sprintf("%stls", tag(ccgo))
+	}
+
+	et := pt.(*cc.PointerType).Elem()
+	switch {
+	case cc.IsScalarType(et):
+		b.w("%s%s(%s, %s, %s, %s)", c.expr(w, n.PostfixExpression, nil, exprCall), c.helper(n, et), tls, c.expr(w, args[0], nil, exprDefault), c.expr(w, args[1], et, exprDefault), c.expr(w, args[2], c.ast.Int, exprDefault))
+	default:
+		c.err(errorf("%v: invalid first argument to atomic operation: pointer to %s", n.ArgumentExpressionList.Position(), et))
+	}
+	return &b, c.void, exprVoid
+}
+
+func (c *ctx) c11AtomicLoad(w writer, n *cc.PostfixExpression, t cc.Type, mode mode) (r *buf, rt cc.Type, rmode mode) {
+	var b buf
+	args := argumentExpressionList(n.ArgumentExpressionList)
+	if len(args) != 2 {
+		c.err(errorf("%v: invalid number of arguments to atomic operation, expected 1, got %v", n.ArgumentExpressionList.Position(), len(args)))
+		return &b, t, mode
+	}
+
+	pt := args[0].Type()
+	if pt.Kind() != cc.Ptr {
+		c.err(errorf("%v: invalid first argument to atomic operation: %s", n.ArgumentExpressionList.Position(), args[0].Type()))
+		return &b, t, mode
+	}
+
+	var tls string
+	switch {
+	case c.f == nil:
+		tls = fmt.Sprintf("%snil", tag(preserve))
+	default:
+		tls = fmt.Sprintf("%stls", tag(ccgo))
+	}
+
+	et := pt.(*cc.PointerType).Elem()
+	switch {
+	case cc.IsScalarType(et):
+		b.w("%s%s(%s, %s, %s)", c.expr(w, n.PostfixExpression, nil, exprCall), c.helper(n, et), tls, c.expr(w, args[0], nil, exprDefault), c.expr(w, args[1], c.ast.Int, exprDefault))
+	default:
+		c.err(errorf("%v: invalid first argument to atomic operation: pointer to %s", n.ArgumentExpressionList.Position(), et))
+	}
+	return &b, et, exprDefault
+}
+
 // void __atomic_exchange (type *ptr, type *val, type *ret, int memorder)
 func (c *ctx) stdatomicExchange(w writer, n *cc.PostfixExpression, t cc.Type, mode mode) (r *buf, rt cc.Type, rmode mode) {
 	var b buf
@@ -2682,7 +2844,7 @@ func (c *ctx) stdatomicExchange(w writer, n *cc.PostfixExpression, t cc.Type, mo
 		return &b, t, mode
 	}
 
-	pt3 := args[1].Type()
+	pt3 := args[2].Type()
 	if pt3.Kind() != cc.Ptr {
 		c.err(errorf("%v: invalid third argument to atomic operation: %s", n.ArgumentExpressionList.Position(), args[2].Type()))
 		return &b, t, mode
@@ -2706,6 +2868,38 @@ func (c *ctx) stdatomicExchange(w writer, n *cc.PostfixExpression, t cc.Type, mo
 	return &b, c.void, exprVoid
 }
 
+func (c *ctx) c11AtomicExchange(w writer, n *cc.PostfixExpression, t cc.Type, mode mode) (r *buf, rt cc.Type, rmode mode) {
+	var b buf
+	args := argumentExpressionList(n.ArgumentExpressionList)
+	if len(args) != 3 {
+		c.err(errorf("%v: invalid number of arguments to atomic operation, expected 4", n.ArgumentExpressionList.Position()))
+		return &b, t, mode
+	}
+
+	pt := args[0].Type()
+	if pt.Kind() != cc.Ptr {
+		c.err(errorf("%v: invalid first argument to atomic operation: %s", n.ArgumentExpressionList.Position(), args[0].Type()))
+		return &b, t, mode
+	}
+
+	var tls string
+	switch {
+	case c.f == nil:
+		tls = fmt.Sprintf("%snil", tag(preserve))
+	default:
+		tls = fmt.Sprintf("%stls", tag(ccgo))
+	}
+
+	et := pt.(*cc.PointerType).Elem()
+	switch {
+	case cc.IsScalarType(et):
+		b.w("%s%s(%s, %s, %s, %s)", c.expr(w, n.PostfixExpression, nil, exprCall), c.helper(n, et), tls, c.expr(w, args[0], nil, exprDefault), c.expr(w, args[1], et, exprDefault), c.expr(w, args[2], c.ast.Int, exprDefault))
+	default:
+		c.err(errorf("%v: invalid first argument to atomic operation: pointer to %s", n.ArgumentExpressionList.Position(), et))
+	}
+	return &b, et, exprDefault
+}
+
 // bool __atomic_compare_exchange (type *ptr, type *expected, type *desired, bool weak, int success_memorder, int failure_memorder)
 func (c *ctx) stdatomicCompareExchange(w writer, n *cc.PostfixExpression, t cc.Type, mode mode) (r *buf, rt cc.Type, rmode mode) {
 	var b buf
@@ -2727,7 +2921,7 @@ func (c *ctx) stdatomicCompareExchange(w writer, n *cc.PostfixExpression, t cc.T
 		return &b, t, mode
 	}
 
-	pt3 := args[1].Type()
+	pt3 := args[2].Type()
 	if pt3.Kind() != cc.Ptr {
 		c.err(errorf("%v: invalid third argument to atomic operation: %s", n.ArgumentExpressionList.Position(), args[2].Type()))
 		return &b, t, mode
@@ -2753,6 +2947,96 @@ func (c *ctx) stdatomicCompareExchange(w writer, n *cc.PostfixExpression, t cc.T
 			c.expr(w, args[3], nil, exprDefault),
 			c.expr(w, args[4], nil, exprDefault),
 			c.expr(w, args[5], nil, exprDefault),
+		)
+	default:
+		c.err(errorf("%v: invalid first argument to atomic operation: pointer to %s", n.ArgumentExpressionList.Position(), et))
+	}
+	return &b, c.ast.Int, mode
+}
+
+// type __sync_val_compare_and_swap (type *ptr, type oldval type newval, ...)
+func (c *ctx) syncValCompareAndSwap(w writer, n *cc.PostfixExpression, t cc.Type, mode mode) (r *buf, rt cc.Type, rmode mode) {
+	var b buf
+	args := argumentExpressionList(n.ArgumentExpressionList)
+	if len(args) < 3 {
+		c.err(errorf("%v: invalid number of arguments to atomic operation, expected at least 3, got %v", n.ArgumentExpressionList.Position(), len(args)))
+		return &b, t, mode
+	}
+
+	pt := args[0].Type()
+	if pt.Kind() != cc.Ptr {
+		c.err(errorf("%v: invalid first argument to atomic operation: %s", n.ArgumentExpressionList.Position(), args[0].Type()))
+		return &b, t, mode
+	}
+
+	var tls string
+	switch {
+	case c.f == nil:
+		tls = fmt.Sprintf("%snil", tag(preserve))
+	default:
+		tls = fmt.Sprintf("%stls", tag(ccgo))
+	}
+
+	et := pt.(*cc.PointerType).Elem()
+	switch {
+	case cc.IsScalarType(et):
+		b.w(
+			"%s%s(%s, %s, %s, %s)",
+			c.expr(w, n.PostfixExpression, nil, exprCall), c.helper(n, et), tls,
+			c.expr(w, args[0], nil, exprDefault),
+			c.expr(w, args[1], nil, exprDefault),
+			c.expr(w, args[2], et, exprDefault),
+		)
+	default:
+		c.err(errorf("%v: invalid first argument to atomic operation: pointer to %s", n.ArgumentExpressionList.Position(), et))
+	}
+	return &b, et, mode
+}
+
+func (c *ctx) c11AtomicCompareExchange(w writer, n *cc.PostfixExpression, t cc.Type, mode mode) (r *buf, rt cc.Type, rmode mode) {
+	var b buf
+	args := argumentExpressionList(n.ArgumentExpressionList)
+	if len(args) != 5 {
+		c.err(errorf("%v: invalid number of arguments to atomic operation, expected 5, got %v", n.ArgumentExpressionList.Position(), len(args)))
+		return &b, t, mode
+	}
+
+	pt := args[0].Type()
+	if pt.Kind() != cc.Ptr {
+		c.err(errorf("%v: invalid first argument to atomic operation: %s", n.ArgumentExpressionList.Position(), args[0].Type()))
+		return &b, t, mode
+	}
+
+	pt2 := args[1].Type()
+	if pt2.Kind() != cc.Ptr {
+		c.err(errorf("%v: invalid second argument to atomic operation: %s", n.ArgumentExpressionList.Position(), args[1].Type()))
+		return &b, t, mode
+	}
+
+	if k, k2 := pt.(*cc.PointerType).Kind(), pt2.(*cc.PointerType).Kind(); k != k2 {
+		c.err(errorf("%v: pointer kind do not match: %s and %s", n.ArgumentExpressionList.Position(), k, k2))
+		return &b, t, mode
+	}
+
+	var tls string
+	switch {
+	case c.f == nil:
+		tls = fmt.Sprintf("%snil", tag(preserve))
+	default:
+		tls = fmt.Sprintf("%stls", tag(ccgo))
+	}
+
+	et := pt.(*cc.PointerType).Elem()
+	switch {
+	case cc.IsScalarType(et):
+		b.w(
+			"%s%s(%s, %s, %s, %s, %s, %s)",
+			c.expr(w, n.PostfixExpression, nil, exprCall), c.helper(n, et), tls,
+			c.expr(w, args[0], nil, exprDefault),
+			c.expr(w, args[1], nil, exprDefault),
+			c.expr(w, args[2], et, exprDefault),
+			c.expr(w, args[3], c.ast.Int, exprDefault),
+			c.expr(w, args[4], c.ast.Int, exprDefault),
 		)
 	default:
 		c.err(errorf("%v: invalid first argument to atomic operation: pointer to %s", n.ArgumentExpressionList.Position(), et))
@@ -4002,9 +4286,12 @@ func (c *ctx) assignmentExpression(w writer, n *cc.AssignmentExpression, t cc.Ty
 				v = fmt.Sprintf("%s", c.expr(w, n.UnaryExpression, nil, exprDefault))
 				switch {
 				case ct.Kind() == ut.Kind():
-					w.w("\n%s %s= %s%s;", v, op, c.topExpr(w, n.AssignmentExpression, ct, exprDefault), k)
+					ex := c.exprWrap(t, "%s %s %s%s", v, op, c.topExpr(w, n.AssignmentExpression, ct, exprDefault), k)
+					w.w("%s = %s;", v, ex)
 				default:
-					w.w("\n%s = %s((%s(%s)) %s ((%s)%s));", v, c.typ(n, ut), c.typ(n, ct), v, op, c.expr(w, n.AssignmentExpression, ct, exprDefault), k)
+					var b buf
+					b.w("(%s(%s)) %s ((%s)%s)", c.typ(n, ct), v, op, c.expr(w, n.AssignmentExpression, ct, exprDefault), k)
+					w.w("\n%s = %s;", v, c.convert(n, w, &b, ct, ut, exprDefault, exprDefault))
 				}
 			default:
 				switch {
@@ -4712,7 +4999,8 @@ func (c *ctx) primaryExpressionIntConst(w writer, n *cc.PrimaryExpression, t cc.
 			break
 		}
 
-		if i, ok := v.(cc.Int64Value); ok && !cc.IsSignedInteger(t) && i >= 0 && cv == cc.UInt64Value(want) {
+		isUnsignedInteger := !cc.IsSignedInteger(t) && t.Kind() != cc.Bool
+		if i, ok := v.(cc.Int64Value); ok && isUnsignedInteger && i >= 0 && cv == cc.UInt64Value(want) {
 			b.w("(%s(%s))", c.verifyTyp(n, t), lit)
 			break
 		}
@@ -4724,7 +5012,12 @@ func (c *ctx) primaryExpressionIntConst(w writer, n *cc.PrimaryExpression, t cc.
 
 		fallthrough
 	default:
-		b.w("(%s%s%sFrom%s(%s))", c.task.tlsQualifier, tag(preserve), c.helper(n, t), c.helper(n, n.Type()), lit)
+		switch {
+		case t.Kind() == cc.Bool:
+			b.w("%s", c.exprWrap(t, "%s", lit))
+		default:
+			b.w("(%s%s%sFrom%s(%s))", c.task.tlsQualifier, tag(preserve), c.helper(n, t), c.helper(n, n.Type()), lit)
+		}
 	}
 	return &b, rt, rmode
 }
@@ -4800,4 +5093,20 @@ func (c *ctx) isVolatileOrAtomicExpr(n cc.ExpressionNode) bool {
 	}
 
 	return true
+}
+
+func (c *ctx) exprWrap(t cc.Type, f string, args ...any) string {
+	switch {
+	case t.Kind() == cc.Bool:
+		var buf strings.Builder
+		buf.WriteString(c.task.tlsQualifier)
+		buf.WriteString(tag(preserve))
+		buf.WriteString("BoolUint8(")
+		_, _ = fmt.Fprintf(&buf, f, args...)
+		buf.WriteString("!=0)")
+		return buf.String()
+
+	default:
+		return fmt.Sprintf(f, args...)
+	}
 }

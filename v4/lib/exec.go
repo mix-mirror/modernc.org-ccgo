@@ -127,7 +127,6 @@ func (t *Task) execed(routes string, cflags []string) (err error) {
 			t.goos, t.goarch, IsExecEnv(), os.Getenv("CC"), routes, t.args, wd,
 		)
 	}
-
 	defer func() {
 		if e := recover(); e != nil && err == nil {
 			err = errorf("PANIC: %v\n%s", e, debug.Stack())
@@ -282,9 +281,10 @@ func (t *Task) ln(execLN, hostLN string) error {
 	set := opt.NewSet()
 	var args []string
 	files := 0
+	set.Opt("f", func(arg string) error { args = append(args, arg); return nil })
+	set.Opt("fs", func(arg string) error { args = append(args, arg); return nil })
 	set.Opt("s", func(arg string) error { args = append(args, arg); return nil })
 	set.Opt("sf", func(arg string) error { args = append(args, arg); return nil })
-	set.Opt("fs", func(arg string) error { args = append(args, arg); return nil })
 	if err := set.Parse(t.args[1:], func(arg string) error {
 		if strings.HasPrefix(arg, "-") {
 			// 			if dmesgs {
@@ -448,6 +448,7 @@ func (t *Task) cc(execCC, hostCC string, cflags []string) error {
 	set.Arg("build-lines", true, func(arg, val string) error { args.add(fmt.Sprintf("%s=%s", arg, val)); return nil })
 	set.Arg("compatibility_version", true, func(arg, val string) error { return nil })
 	set.Arg("current_version", false, func(arg, val string) error { return nil })
+	set.Arg("ggdb3", true, func(arg, val string) error { args.add(fmt.Sprintf("%s=%s", arg, val)); return nil })
 	set.Arg("gz", true, func(arg, val string) error { args.add(fmt.Sprintf("%s=%s", arg, val)); return nil })
 	set.Arg("idirafter", true, func(arg, val string) error { args.add(fmt.Sprintf("%s=%s", arg, val)); return nil })
 	set.Arg("include", true, func(arg, val string) error { args.add(fmt.Sprintf("%s=%s", arg, val)); return nil })
@@ -458,9 +459,10 @@ func (t *Task) cc(execCC, hostCC string, cflags []string) error {
 	set.Arg("march", true, func(arg, val string) error { args.add(fmt.Sprintf("%s=%s", arg, val)); return nil })
 	set.Arg("mtune", true, func(arg, val string) error { args.add(fmt.Sprintf("%s=%s", arg, val)); return nil })
 	set.Arg("o", true, func(arg, val string) error { args.add(arg, val+".go"); return nil })
+	set.Arg("rpath", true, func(arg, val string) error { return nil })
 	set.Arg("sectcreate", false, func(arg, val string) error { ignore = 2; return nil })
 	set.Arg("std", true, func(arg, val string) error { args.add(fmt.Sprintf("%s=%s", arg, val)); return nil })
-	set.Opt("no-main-minimize", func(arg string) error { return nil })
+	set.Opt("-doom", func(arg string) error { args.add(arg); return nil })
 	set.Opt("-version", func(arg string) error { args.add(arg); return nil })
 	set.Opt("E", func(arg string) error { optE = true; return nil })
 	set.Opt("MMD", func(arg string) error { return nil })
@@ -468,6 +470,7 @@ func (t *Task) cc(execCC, hostCC string, cflags []string) error {
 	set.Opt("ansi", func(arg string) error { args.add(arg); return nil })
 	set.Opt("c", func(arg string) error { args.add(arg); return nil })
 	set.Opt("dumpmachine", func(arg string) error { args.add(arg); return nil })
+	set.Opt("dynamic", func(arg string) error { args.add(arg); return nil })
 	set.Opt("dynamiclib", func(arg string) error { return nil })
 	set.Opt("emit-func-aliases", func(arg string) error { args.add(arg); return nil })
 	set.Opt("eval-all-macros", func(arg string) error { args.add(arg); return nil })
@@ -516,6 +519,7 @@ func (t *Task) cc(execCC, hostCC string, cflags []string) error {
 	set.Opt("mno-xop", func(arg string) error { args.add(arg); return nil })
 	set.Opt("municode", func(arg string) error { args.add(arg); return nil })
 	set.Opt("mwindows", func(arg string) error { args.add(arg); return nil })
+	set.Opt("no-main-minimize", func(arg string) error { return nil })
 	set.Opt("nostdinc", func(arg string) error { args.add(arg); return nil })
 	set.Opt("nostdlib", func(arg string) error { args.add(arg); return nil })
 	set.Opt("pedantic", func(arg string) error { args.add(arg); return nil })
@@ -691,6 +695,7 @@ func (t *Task) ar(execAR, hostAR string) (err error) {
 
 					out += sc
 				case
+					"D", // deterministic mode
 					"s", // add index
 					"t": // display content
 

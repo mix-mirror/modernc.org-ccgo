@@ -406,5 +406,4 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/tcc-0.9.27/tests/tests2/76_dollars_in_identifiers.c`:                                        {}, // COMPILE FAIL: "\"76_dollars_in_identifiers.c: gofmt: exit status 2 (.:0:: asm_arm64.s:1197:goexit: asm_arm64.s:1197:goexit: asm_arm64.s:1197:goexit: compile.go:495:compile: compile.go:495:compile:)\""
 	`assets/tcc-0.9.27/tests/tests2/85_asm-outside-function.c`:                                          {}, // COMPILE FAIL: "85_asm-outside-function.o.go:18:2: undefined: \"vide\" external (all_test.go:447:1: all_test.go:538:testExec1: ccgo.go:192:Main: ccgo.go:581:main: link.go:302:link: link.go:814:link:) (all_test.go:447:1..."
 	`assets/tcc-0.9.27/tests/tests2/87_dead_code.c`:                                                     {}, // COMPILE FAIL: "\"87_dead_code.c: gofmt: exit status 2 (.:0:: asm_arm64.s:1197:goexit: asm_arm64.s:1197:goexit: asm_arm64.s:1197:goexit: compile.go:495:compile: compile.go:495:compile:)\""
-
 }

@@ -20,6 +20,8 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/github.com/vnmakarov/mir/c-tests/new/setjmp.c`:                                              {}, // EXEC FAIL: "assets/github.com/vnmakarov/mir/c-tests/new/setjmp.c: libc.go:2142:Xlongjmp: TODOTODO "
 	`assets/github.com/vnmakarov/mir/c-tests/new/setjmp2.c`:                                             {}, // EXEC FAIL: "assets/github.com/vnmakarov/mir/c-tests/new/setjmp2.c: libc.go:2142:Xlongjmp: TODOTODO "
 
+	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr36093.c`: {}, // EXEC FAIL: assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr36093.c: panic: 544
+
 	// BUILD FAIL - compiles but does not build.
 
 	`assets/benchmarksgame-team.pages.debian.net/reverse-complement-4.c`: {}, // BUILD FAIL: "exit status 1"
@@ -366,7 +368,6 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr23467.c`:                            {}, // COMPILE FAIL: "\"pr23467.c:3:1: unsupported alignment 8 of int (decl.go:597:declaration: type.go:559:defineStructType: type.go:494:structLiteral: type.go:263:typ0: type.go:65:typ0: type.go:426:isValidType1:)\""
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr24135.c`:                            {}, // COMPILE FAIL: "\"pr24135.c:7:3: label declarations not supported (compile.go:433:compile: decl.go:295:externalDeclaration: decl.go:323:functionDefinition: decl.go:353:functionDefinition0: stmt.go:324:compoundStatemen..."
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr34154.c`:                            {}, // COMPILE FAIL: "\"TODO SelectionStatementSwitch (decl.go:353:functionDefinition0: stmt.go:324:compoundStatement: stmt.go:360:blockItem: stmt.go:42:statement: stmt.go:444:selectionStatement: stmt.go:512:selectionStatem..."
-	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr36093.c`:                            {}, // COMPILE FAIL: "\"pr36093.c:13:5: unsupported alignment 128 of Foo (decl.go:607:declaration: decl.go:776:initDeclarator: type.go:42:typ: type.go:337:typ0: type.go:65:typ0: type.go:426:isValidType1:)\""
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr38151.c`:                            {}, // COMPILE FAIL: "\"TODO *cc.PredefinedType _Complex int _Complex int (decl.go:297:externalDeclaration: decl.go:597:declaration: type.go:559:defineStructType: type.go:494:structLiteral: type.go:263:typ0: type.go:159:typ..."
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr38969.c`:                            {}, // COMPILE FAIL: "\"TODO UnaryExpressionReal (expr.go:101:expr: expr.go:501:expr0: expr.go:3510:assignmentExpression: expr.go:101:expr: expr.go:537:expr0: expr.go:1724:unaryExpression:)\""
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr41935.c`:                            {}, // COMPILE FAIL: "\"pr41935.c:10:10: TODO (expr.go:1912:postfixExpressionIndex: expr.go:101:expr: expr.go:529:expr0: expr.go:1963:postfixExpression: expr.go:1796:postfixExpressionIndex: expr.go:1746:mul:)\""

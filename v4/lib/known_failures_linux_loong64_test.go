@@ -30,6 +30,8 @@ var testExecKnownFails = map[string]struct{}{
 	// Won't fix: return_addr
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/return-addr.c`: {},
 
+	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr36093.c`: {}, // EXEC FAIL: assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr36093.c: panic: 544
+
 	//TODO
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c`:                 {}, // EXEC FAIL: "assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c: : FAIL: signal: aborted (core dumped) (.:0:: .:0:: asm_loong64.s:640:goexit: asm_loong64.s:640:goexit: all_test.go:45..."
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/ieee/fp-cmp-1.c`:                              {}, // EXEC FAIL: "assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/ieee/fp-cmp-1.c: panic: libc_musl.go:659:Xsignal"
@@ -580,4 +582,5 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/tcc-0.9.27/tests/tests2/87_dead_code.c`:                                             {}, // COMPILE FAIL: "\"87_dead_code.c: gofmt: exit status 2 (.:0:: asm_loong64.s:640:goexit: asm_loong64.s:640:goexit: asm_loong64.s:640:goexit: compile.go:495:compile: compile.go:495:compile:)\""
 	`assets/tcc-0.9.27/tests/tests2/95_bitfields.c`:                                             {}, // COMPILE FAIL: "\"95_bitfields.c:27:5: unsupported alignment 16 of char (expr.go:101:expr: expr.go:537:expr0: expr.go:1665:unaryExpression: type.go:400:isValidType: type.go:412:isValidType: type.go:431:isValidType1:)\""
 	`assets/tcc-0.9.27/tests/tests2/95_bitfields_ms.c`:                                          {}, // COMPILE FAIL: "\"95_bitfields.c:27:5: unsupported alignment 16 of char (expr.go:101:expr: expr.go:537:expr0: expr.go:1665:unaryExpression: type.go:400:isValidType: type.go:412:isValidType: type.go:431:isValidType1:)\""
+	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr70355.c`:                            {}, // COMPILE FAIL: "\"TODO vector (compile.go:478:compile: decl.go:298:externalDeclaration: decl.go:985:declaration: decl.go:1150:initDeclarator: type.go:18:typedef: type.go:89:typ0:)\""
 }
