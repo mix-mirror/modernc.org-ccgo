@@ -3881,6 +3881,12 @@ func (c *ctx) postfixExpressionCall(w writer, n *cc.PostfixExpression, mode mode
 			return
 		}
 
+		c.f.autovarNesting++
+
+		defer func() {
+			c.f.autovarNesting--
+		}()
+
 		for _, v := range ft.Parameters() {
 			if v.Declarator != nil {
 				c.f.registerLocal(v.Declarator)
@@ -4021,8 +4027,8 @@ func (c *ctx) atomicStore(w writer, n cc.Node, p, v *buf, t cc.Type, mode mode) 
 			case exprVoid:
 				w.w("(*(*%s)(%s)) = %s;", c.typ(n, t), unsafePointer(p), v)
 			default:
-				nm := c.f.newAutovarName()
-				w.w("%s := %s;", nm, v)
+				nm := c.f.newAutovar(n, t)
+				w.w("%s = %s;", nm, v)
 				w.w("(*(*%s)(%s)) = %s;", c.typ(n, t), unsafePointer(p), nm)
 				b.w("(%s)", nm)
 			}
@@ -4044,8 +4050,8 @@ func (c *ctx) atomicLoad(w writer, n cc.Node, p *buf, t cc.Type) *buf {
 		switch t.Size() {
 		case 1, 2, 4, 8:
 			if c.f != nil {
-				nm := c.f.newAutovarName()
-				w.w("%s := %sAtomicLoadPUint%d(%s);", nm, c.task.tlsQualifier, 8*t.Size(), p)
+				nm := c.f.newAutovar(n, t)
+				w.w("%s = %sAtomicLoadPUint%d(%s);", nm, c.task.tlsQualifier, 8*t.Size(), p)
 				b.w("(*(*%s)(%s))", c.typ(n, t), unsafeAddr(nm))
 				return &b
 			}
@@ -4579,6 +4585,12 @@ out:
 		defer func() { r.volatileOrAtomicHandled = true }()
 		return c.expr0(w, n.ExpressionList, nil, mode)
 	case cc.PrimaryExpressionStmt: // '(' CompoundStatement ')'
+		c.f.autovarNesting++
+
+		defer func() {
+			c.f.autovarNesting--
+		}()
+
 		c.exprStmtLevel++
 
 		defer func() { c.exprStmtLevel-- }()

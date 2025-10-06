@@ -13,6 +13,9 @@ import (
 )
 
 func (c *ctx) statement(w writer, n *cc.Statement) {
+	if c.f.autovarNesting == 0 {
+		defer c.f.rewindAutovars()
+	}
 	sep := sep(n)
 	if c.task.positions {
 		sep = strings.TrimRight(sep, "\n\r\t ")
@@ -1164,6 +1167,10 @@ func (c *ctx) jumpStatement(w writer, n *cc.JumpStatement) {
 
 		w.w("break;")
 	case cc.JumpStatementReturn: // "return" ExpressionList ';'
+		if c.f.autovarNesting == 0 {
+			defer c.f.rewindAutovars()
+		}
+
 		if nfo := c.f.inlineInfo; nfo != nil {
 			switch ft := nfo.fd.Declarator.Type().(*cc.FunctionType); {
 			case n.ExpressionList != nil:
