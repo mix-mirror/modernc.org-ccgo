@@ -178,11 +178,14 @@ func (f *fnCtx) newAutovarType(n cc.Node, t cc.Type) (nm string) {
 }
 
 func (f *fnCtx) newAutovarTyp(n cc.Node, typ string) (nm string) {
+	pass := f.c.pass
 	nm = f.newAutovarName()
-	vars := f.autovars[typ]
-	if ix, ok := f.autovarsX[typ]; ok && ix < len(vars) {
-		f.autovarsX[typ]++
-		return vars[ix]
+	if pass == 2 {
+		vars := f.autovars[typ]
+		if ix, ok := f.autovarsX[typ]; ok && ix < len(vars) {
+			f.autovarsX[typ]++
+			return vars[ix]
+		}
 	}
 
 	f.autovars[typ] = append(f.autovars[typ], nm)
