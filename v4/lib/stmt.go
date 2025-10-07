@@ -526,7 +526,7 @@ func (c *ctx) setJmpNeq0(w writer, n *cc.SelectionStatement) (r bool) {
 		return false
 	}
 
-	v := c.f.newAutovar(n, c.pvoid)
+	v := c.f.newAutovarType(n, c.pvoid)
 	jb := c.expr(w, arg, nil, exprDefault)
 	w.w("\n%s = %s;", v, jb)
 	w.w("\n%stls.%[1]sPushJumpBuffer(%s)", tag(preserve), v)
@@ -593,7 +593,7 @@ func (c *ctx) notSetJmp(w writer, n *cc.SelectionStatement) (r bool) {
 		return false
 	}
 
-	v := c.f.newAutovar(n, c.pvoid)
+	v := c.f.newAutovarType(n, c.pvoid)
 	jb := c.expr(w, arg, nil, exprDefault)
 	w.w("\n%s = %s;", v, jb)
 	w.w("\n%stls.%[1]sPushJumpBuffer(%s)", tag(preserve), v)
@@ -662,7 +662,7 @@ func (c *ctx) setJmpEq0(w writer, n *cc.SelectionStatement) (r bool) {
 		return false
 	}
 
-	v := c.f.newAutovar(n, c.pvoid)
+	v := c.f.newAutovarType(n, c.pvoid)
 	jb := c.expr(w, arg, nil, exprDefault)
 	w.w("\n%s = %s;", v, jb)
 	w.w("\n%stls.%[1]sPushJumpBuffer(%s)", tag(preserve), v)
@@ -1170,7 +1170,6 @@ func (c *ctx) jumpStatement(w writer, n *cc.JumpStatement) {
 		if c.f.autovarNesting == 0 {
 			defer c.f.rewindAutovars()
 		}
-
 		if nfo := c.f.inlineInfo; nfo != nil {
 			switch ft := nfo.fd.Declarator.Type().(*cc.FunctionType); {
 			case n.ExpressionList != nil:
@@ -1182,7 +1181,7 @@ func (c *ctx) jumpStatement(w writer, n *cc.JumpStatement) {
 					w.w("%s_ = %s;", tag(preserve), c.topExpr(w, n.ExpressionList, nil, exprDefault))
 				default:
 					if nfo.exit == "" {
-						nfo.result = c.f.newAutovar(nfo.fd, ft.Result())
+						nfo.result = c.f.newAutovarType(nfo.fd, ft.Result())
 						nfo.exit = c.label()
 					}
 					w.w("%s = %s;", nfo.result, c.topExpr(w, n.ExpressionList, ft.Result(), exprDefault))

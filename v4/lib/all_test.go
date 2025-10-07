@@ -446,10 +446,6 @@ func testExec(t *testing.T, cfsDir string, exec bool, g *golden) {
 		case re != nil && !re.MatchString(base):
 			p.skip()
 			return nil
-		case base == "bool.c":
-			// Temporary disable 'bool.c' on all targets, see !22 at https://gitlab.com/cznic/ccgo/-/merge_requests/22
-			p.skip()
-			return nil
 		}
 
 		if totalMemory < 4<<30 && strings.HasPrefix(base, "limits-") {

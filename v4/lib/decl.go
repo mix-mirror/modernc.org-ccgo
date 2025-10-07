@@ -74,22 +74,20 @@ type fnCtx struct {
 	autovars         map[string][]string
 	autovarsX        map[string]int
 	c                *ctx
+	callsAlloca      bool
 	compoundLiterals map[cc.ExpressionNode]int64
 	d                *cc.Declarator
 	declInfos        declInfos
 	flatScopes       map[*cc.Scope]struct{}
 	fnResults        map[cc.ExpressionNode]int64
+	inDefer          int
 	inlineInfo       *inlineInfo
 	locals           map[*cc.Declarator]string // storage: static or automatic, linkage: none -> C renamed
 	maxVaListSize    int64
+	nextID           int
 	t                *cc.FunctionType
 	tlsAllocs        int64
 	vlaSizes         map[*cc.Declarator]string
-
-	inDefer int
-	nextID  int
-
-	callsAlloca bool
 }
 
 func (c *ctx) newFnCtx(d *cc.Declarator, t *cc.FunctionType, n *cc.CompoundStatement) (r *fnCtx) {
@@ -171,36 +169,29 @@ next:
 	}
 }
 
-// int main() {
-// 	int a = 1, b = 2, c = 3;
-// 	int x, y, z;
-// 	x = ++a;
-// 	y = ++b;
-// 	z = ++c;
-// 	trc("a=%i b=%i c=%i", a, b, c);
-// 	trc("x=%i y=%i z=%i", x, y, z);
-// }
+func (f *fnCtx) newAutovarName() (nm string) {
+	return fmt.Sprintf("%sv%d", tag(ccgoAutomatic), f.c.id())
+}
 
-func (f *fnCtx) newAutovar(n cc.Node, t cc.Type) (nm string) {
-	st := f.c.typ(n, t)
-	ix, ok := f.autovarsX[st]
-	vars := f.autovars[st]
-	if ok && ix < len(vars) {
-		f.autovarsX[st]++
+func (f *fnCtx) newAutovarType(n cc.Node, t cc.Type) (nm string) {
+	return f.newAutovarTyp(n, f.c.typ(n, t))
+}
+
+func (f *fnCtx) newAutovarTyp(n cc.Node, typ string) (nm string) {
+	nm = f.newAutovarName()
+	vars := f.autovars[typ]
+	if ix, ok := f.autovarsX[typ]; ok && ix < len(vars) {
+		f.autovarsX[typ]++
 		return vars[ix]
 	}
 
-	nm = fmt.Sprintf("%sv%d", tag(ccgoAutomatic), f.c.id())
-	f.registerAutoVar(nm, st)
+	f.autovars[typ] = append(f.autovars[typ], nm)
 	return nm
 }
 
-func (f *fnCtx) registerAutoVar(nm, typ string) {
-	f.autovars[typ] = append(f.autovars[typ], nm)
-}
-
 func (f *fnCtx) rewindAutovars() {
-	for k := range f.autovarsX {
+	clear(f.autovarsX)
+	for k := range f.autovars {
 		f.autovarsX[k] = 0
 	}
 }
@@ -473,7 +464,7 @@ func (c *ctx) functionDefinition0(w writer, sep string, pos cc.Node, d *cc.Decla
 	c.pass = 2
 	c.f.nextID = 0
 	c.f.autovarNesting = 0
-	clear(c.f.autovarsX)
+	c.f.rewindAutovars()
 	isMain := d.Linkage() == cc.External && d.Name() == "main"
 	// trc("==== %v: sep `%s`", d.Position(), sep) //TODO-DBG
 	s := c.cdoc(sep, d)
@@ -1155,7 +1146,7 @@ func (c *ctx) initDeclarator(w writer, sep string, n *cc.InitDeclarator, isExter
 			dt = x.Elem()
 		}
 		if x, ok := c.isVLA(dt); ok {
-			v := c.f.newAutovar(n, c.ast.SizeT)
+			v := c.f.newAutovarType(n, c.ast.SizeT)
 			if c.f.vlaSizes == nil {
 				c.f.vlaSizes = map[*cc.Declarator]string{}
 			}
