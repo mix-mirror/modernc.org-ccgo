@@ -2143,6 +2143,12 @@ out:
 			"__atomic_store_n",
 			"__c11_atomic_store_n":
 			return c.atomicStoreN(w, n, t, mode)
+		case "__builtin_popcount":
+			return c.popcount(w, n, t, mode, c.ast.UInt)
+		case "__builtin_popcountl":
+			return c.popcount(w, n, t, mode, c.ast.ULong)
+		case "__builtin_popcountll":
+			return c.popcount(w, n, t, mode, c.ast.ULongLong)
 		case "__builtin_sub_overflow":
 			return c.subOverflow(w, n, t, mode)
 		case "__builtin_mul_overflow":
@@ -2600,6 +2606,39 @@ func (c *ctx) addOverflow(w writer, n *cc.PostfixExpression, t cc.Type, mode mod
 		c.err(errorf("TODO %s + %s -> %s", args[0].Type(), args[1].Type(), to))
 	}
 	b.w("%s__builtin_add_overflow%s(%stls, %s, %s, %s)", tag(external), c.helper(n, to), tag(ccgo), c.expr(w, args[0], to, exprDefault), c.expr(w, args[1], to, exprDefault), c.expr(w, args[2], nil, exprDefault))
+	return &b, c.ast.Int, exprDefault
+}
+
+func (c *ctx) popcount(w writer, n *cc.PostfixExpression, t cc.Type, mode mode, width cc.Type) (r *buf, rt cc.Type, rmode mode) {
+	var b buf
+	args := argumentExpressionList(n.ArgumentExpressionList)
+	if len(args) != 1 {
+		c.err(errorf("%v: invalid number of arguments to __builtin_popcount*", n.ArgumentExpressionList.Position()))
+		return &b, t, mode
+	}
+
+	switch {
+	case cc.IsScalarType(args[0].Type()):
+		// ok
+	default:
+		c.err(errorf("%v: invalid first argument to __builtin_popcount*: %s", n.ArgumentExpressionList.Position(), args[0].Type()))
+		return &b, t, mode
+	}
+
+	suffix := ""
+	switch width.Kind() {
+	case cc.UInt:
+		suffix = ""
+	case cc.ULong:
+		suffix = "l"
+	case cc.ULongLong:
+		suffix = "ll"
+	default:
+		c.err(errorf("%v: unexpected width for __builtin_popcount*: %s", n.ArgumentExpressionList.Position(), width))
+		return &b, t, mode
+	}
+
+	b.w("%s__builtin_popcount%s(%stls, %s)", tag(external), suffix, tag(ccgo), c.expr(w, args[0], width, exprDefault))
 	return &b, c.ast.Int, exprDefault
 }
 
