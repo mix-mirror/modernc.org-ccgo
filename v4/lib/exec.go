@@ -245,7 +245,14 @@ func (t *Task) libtool(execLibtool, hostLibtool, hostAR string) error {
 	}); err != nil {
 		return err
 	}
-	args2 := strSlice{"-cr", outfn}
+	var args2 strSlice
+	switch {
+	case t.goos == "darwin":
+		// Apple recently broke ar(1), the workaround is to disable the symbol table.
+		args2 = strSlice{"-cr", "-S", outfn}
+	default:
+		args2 = strSlice{"-cr", outfn}
+	}
 	args2 = append(args2, args...)
 	// 	if dmesgs {
 	// 		dmesg("", args2)
