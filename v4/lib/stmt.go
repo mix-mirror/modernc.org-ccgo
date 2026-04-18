@@ -405,7 +405,7 @@ func (c *ctx) selectionStatement(w writer, n *cc.SelectionStatement) {
 		}
 	}
 
-	if c.setJmpEq0(w, n) || c.setJmpNeq0(w, n) || c.notSetJmp(w, n) {
+	if c.setJmpEq0(w, n) || c.setJmpNeq0(w, n) || c.notSetJmp(w, n) || c.setJmpEqM1(w, n) {
 		return
 	}
 
@@ -510,6 +510,82 @@ func (c *ctx) setJmpNeq0(w writer, n *cc.SelectionStatement) (r bool) {
 	var arg cc.ExpressionNode
 	lhs, rhs := c.cmpExprNeq(n.ExpressionList)
 	if lhs != nil && c.isNonZero(rhs.Value()) {
+		return false
+	}
+
+	if lhs == nil {
+		if arg = c.isSetJmp(n.ExpressionList); arg == nil {
+			return false
+		}
+	}
+
+	if arg == nil {
+		arg = c.isSetJmp(lhs)
+	}
+	if arg == nil {
+		return false
+	}
+
+	v := c.f.newAutovarType(n, c.pvoid)
+	jb := c.expr(w, arg, nil, exprDefault)
+	w.w("\n%s = %s;", v, jb)
+	w.w("\n%stls.%[1]sPushJumpBuffer(%s)", tag(preserve), v)
+
+	func() {
+		c.f.inDefer++
+
+		defer func() { c.f.inDefer-- }()
+
+		w.w("\ndefer func() {")
+		w.w("\nswitch %srecover().(%[1]stype) {", tag(preserve))
+		w.w("\ncase %s%sLongjmpRetval:", c.task.tlsQualifier, tag(preserve))
+		c.statement(w, n.Statement)
+		w.w("%sdefault:", tag(preserve))
+		w.w("\n%stls.%[1]sPopJumpBuffer(%s)", tag(preserve), v)
+		w.w("\n}")
+		w.w("\n}();")
+	}()
+
+	if n.Statement2 != nil {
+		w.w("\n{")
+		c.statement(w, n.Statement2)
+		w.w("\n};")
+	}
+	return true
+}
+
+// C: if (setjmp(jb) == -1) stmt1; else stmt2; // any non zero RHS will do
+//
+//	if (setjmp(jb)) stmt1; else stmt2;
+//
+// Go:
+//
+//	tls.PushJumpBuffer(jb)
+//
+//	defer func() {
+//		switch x := recover().(type) {
+//		case libc.LongjmpRetval:
+//			stmt1
+//		default:
+//			tls.PopJumpBuffer(jb)
+//		}
+//	}()
+//
+//	stmt2
+func (c *ctx) setJmpEqM1(w writer, n *cc.SelectionStatement) (r bool) {
+	switch n.Case {
+	case
+		cc.SelectionStatementIf,     // "if" '(' ExpressionList ')' Statement
+		cc.SelectionStatementIfElse: // "if" '(' ExpressionList ')' Statement "else" Statement
+
+		// ok
+	default:
+		return false
+	}
+
+	var arg cc.ExpressionNode
+	lhs, rhs := c.cmpExprEq(n.ExpressionList)
+	if lhs != nil && c.isZero(rhs.Value()) {
 		return false
 	}
 
@@ -718,14 +794,38 @@ func (c *ctx) isSetJmp(n cc.ExpressionNode) (arg cc.ExpressionNode) {
 				return nil
 			}
 
-			if c.isIdentifier(fn) != "setjmp" || len(args) != 1 {
+			if c.isIdentifier(fn) != "setjmp" {
 				return nil
 			}
 
 			return args[0]
+		case *cc.CastExpression: // Handle implicit casts
+			switch x.Case {
+			case cc.CastExpressionCast:
+				n = x.CastExpression
+			case cc.CastExpressionUnary:
+				n = x.UnaryExpression // Drill down to Unary
+			default:
+				return nil
+			}
+		case *cc.UnaryExpression: // Handle potential pointer/address ops
+			switch x.Case {
+			case cc.UnaryExpressionPostfix:
+				n = x.PostfixExpression
+			default:
+				// Operators like &, *, !, sizeof, etc., cannot be
+				// part of a standard setjmp(jb) call.
+				return nil
+			}
+		case *cc.PrimaryExpression:
+			switch x.Case {
+			case cc.PrimaryExpressionExpr:
+				n = x.ExpressionList
+			default:
+				return nil
+			}
 		default:
 			return nil
-			//panic(todo("%v: %T %s", n.Position(), x, cc.NodeSource(n)))
 		}
 	}
 }

@@ -70,24 +70,25 @@ type inlineInfo struct {
 }
 
 type fnCtx struct {
-	autovarNesting   int
-	autovars         map[string][]string
-	autovarsX        map[string]int
-	c                *ctx
-	callsAlloca      bool
-	compoundLiterals map[cc.ExpressionNode]int64
-	d                *cc.Declarator
-	declInfos        declInfos
-	flatScopes       map[*cc.Scope]struct{}
-	fnResults        map[cc.ExpressionNode]int64
-	inDefer          int
-	inlineInfo       *inlineInfo
-	locals           map[*cc.Declarator]string // storage: static or automatic, linkage: none -> C renamed
-	maxVaListSize    int64
-	nextID           int
-	t                *cc.FunctionType
-	tlsAllocs        int64
-	vlaSizes         map[*cc.Declarator]string
+	autovarNesting                int
+	autovars                      map[string][]string
+	autovarsX                     map[string]int
+	c                             *ctx
+	callsAlloca                   bool
+	compoundLiterals              map[cc.ExpressionNode]int64
+	d                             *cc.Declarator
+	declInfos                     declInfos
+	flatScopes                    map[*cc.Scope]struct{}
+	fnResults                     map[cc.ExpressionNode]int64
+	hasSwitchInIterationStatement bool
+	inDefer                       int
+	inlineInfo                    *inlineInfo
+	locals                        map[*cc.Declarator]string // storage: static or automatic, linkage: none -> C renamed
+	maxVaListSize                 int64
+	nextID                        int
+	t                             *cc.FunctionType
+	tlsAllocs                     int64
+	vlaSizes                      map[*cc.Declarator]string
 }
 
 func (c *ctx) newFnCtx(d *cc.Declarator, t *cc.FunctionType, n *cc.CompoundStatement) (r *fnCtx) {
@@ -130,6 +131,8 @@ next:
 		}
 	}
 	var fc *flowCtx
+	inIterationStatement := 0
+	hasSwitchInIterationStatement := false
 	walkC(n, func(n cc.Node, mode int) {
 		switch x := n.(type) {
 		case *cc.Statement:
@@ -156,16 +159,42 @@ next:
 						}
 					}
 				}
+			case cc.StatementIteration:
+				switch mode {
+				case walkPre:
+					inIterationStatement++
+				case walkPost:
+					inIterationStatement--
+				}
+			}
+		case *cc.SelectionStatement:
+			switch x.Case {
+			case cc.SelectionStatementSwitch:
+				switch mode {
+				case walkPre:
+					if inIterationStatement > 0 {
+						hasSwitchInIterationStatement = true
+					}
+				}
 			}
 		}
 	})
+	if hasSwitchInIterationStatement {
+		switch re := c.task.hotSwitchRE; re {
+		case nil:
+			hasSwitchInIterationStatement = false
+		default:
+			hasSwitchInIterationStatement = re.MatchString(d.Name())
+		}
+	}
 	return &fnCtx{
-		autovars:   map[string][]string{},
-		autovarsX:  map[string]int{},
-		c:          c,
-		d:          d,
-		flatScopes: flatScopes,
-		t:          t,
+		autovars:                      map[string][]string{},
+		autovarsX:                     map[string]int{},
+		c:                             c,
+		d:                             d,
+		flatScopes:                    flatScopes,
+		hasSwitchInIterationStatement: hasSwitchInIterationStatement,
+		t:                             t,
 	}
 }
 
@@ -208,6 +237,11 @@ func (f *fnCtx) registerLocal(d *cc.Declarator) {
 		f.locals = map[*cc.Declarator]string{}
 	}
 	f.locals[d] = ""
+	if f.hasSwitchInIterationStatement {
+		if !d.IsParam() {
+			f.declInfos.takeAddress(d)
+		}
+	}
 }
 
 func (f *fnCtx) isFuncPtr(n cc.Node, t cc.Type) (r bool, ft *cc.FunctionType) {

@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 
@@ -31,8 +32,11 @@ import (
 )
 
 var (
-	oTraceL = flag.Bool("trcl", false, "Print produced object files.")
-	oTraceG = flag.Bool("trcg", false, "Print produced Go files.")
+	oTraceL        = flag.Bool("trcl", false, "Print produced object files.")
+	oTraceG        = flag.Bool("trcg", false, "Print produced Go files.")
+	patchedBuiltin = cc.Builtin + `
+#define __builtin_expect(exp, c) (long)(exp)
+`
 
 	isTesting bool
 )
@@ -53,12 +57,13 @@ type Task struct {
 	compiledfFiles        map[string]string // *.c -> *.o.go
 	cpp                   string            // -cpp <string>
 	defs                  string
-	routes                string // -map <comma separated list>
 	fs                    fs.FS
 	goABI                 *gc.ABI
-	goarch                string   // -goos <string>
-	goos                  string   // -goarch <string>
-	hidden                nameSet  // -hide <string>
+	goarch                string  // -goos <string>
+	goos                  string  // -goarch <string>
+	hidden                nameSet // -hide <string>
+	hotSwitch             string  // --hot-switch <regexp>
+	hotSwitchRE           *regexp.Regexp
 	idirafter             []string // -idirafter
 	ignoreFile            nameSet  // -ignore-file=<comma separated file list>
 	imports               []string // -import=<comma separated import list>
@@ -100,6 +105,7 @@ type Task struct {
 	//	-map ar=x86_64-w64-mingw32-gcc-ar,cc=x86_64-w64-mingw32-gcc
 	//
 	// The tool must be one of ar,cc,clang,gcc,libtool,ln,mv,rm.
+	routes       string // -map <comma separated list>
 	std          string // -std
 	stderr       io.Writer
 	stdout       io.Writer
@@ -312,6 +318,7 @@ func (t *Task) main() (err error) {
 		}
 		return nil
 	})
+	set.Arg("-hot-switch", false, func(arg, val string) error { t.hotSwitch = val; return nil })
 	set.Arg("-winabi", false, func(arg, val string) error { t.winabi = val; return nil })
 	set.Arg("-winapi-test", false, func(arg, val string) error { t.winapiTest = val; return nil })
 	set.Arg("-winapi", false, func(arg, val string) error {
@@ -363,7 +370,9 @@ func (t *Task) main() (err error) {
 	set.Opt("verify-types", func(arg string) error { t.verifyTypes = true; return nil })
 
 	// Ignored
+	set.Arg("framework", false, func(arg, val string) error { return nil }) // darwin/clang
 	set.Arg("MF", true, func(arg, val string) error { return nil })
+	set.Arg("MP", true, func(arg, val string) error { return nil })
 	set.Arg("MQ", true, func(arg, val string) error { return nil })
 	set.Arg("MT", true, func(arg, val string) error { return nil })
 	set.Arg("arch", true, func(arg, val string) error { return nil })
@@ -448,6 +457,12 @@ func (t *Task) main() (err error) {
 			return t.exec([]string(x))
 		default:
 			return errorf("parsing %v: %v", t.args[1:], err)
+		}
+	}
+
+	if t.hotSwitch != "" {
+		if t.hotSwitchRE, err = regexp.Compile(t.hotSwitch); err != nil {
+			return errorf("compiling --hot-switch argumnent`: err=%v", t.hotSwitch, err)
 		}
 	}
 
@@ -741,7 +756,7 @@ func sourcesFor(cfg *cc.Config, fn string, t *Task) (r []cc.Source, err error) {
 	}
 	r = []cc.Source{
 		{Name: "<predefined>", Value: predef},
-		{Name: "<builtin>", Value: cc.Builtin},
+		{Name: "<builtin>", Value: patchedBuiltin},
 	}
 	if t.defs != "" {
 		r = append(r, cc.Source{Name: "<command-line>", Value: t.defs})

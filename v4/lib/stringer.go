@@ -23,11 +23,11 @@ const _mode_name = "exprBoolexprCallexprDefaultexprIndexexprLvalueexprSelectexpr
 var _mode_index = [...]uint8{0, 8, 16, 27, 36, 46, 56, 67, 75}
 
 func (i mode) String() string {
-	i -= 1
-	if i < 0 || i >= mode(len(_mode_index)-1) {
-		return "mode(" + strconv.FormatInt(int64(i+1), 10) + ")"
+	idx := int(i) - 1
+	if i < 1 || idx >= len(_mode_index)-1 {
+		return "mode(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _mode_name[_mode_index[i]:_mode_index[i+1]]
+	return _mode_name[_mode_index[idx]:_mode_index[idx+1]]
 }
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
@@ -57,8 +57,9 @@ const _name_name = "externaltypenametaggedStructtaggedUniontaggedEumenumConstimp
 var _name_index = [...]uint8{0, 8, 16, 28, 39, 48, 57, 72, 77, 83, 97, 107, 116, 129, 133, 138, 142, 150}
 
 func (i name) String() string {
-	if i < 0 || i >= name(len(_name_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_name_index)-1 {
 		return "name(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _name_name[_name_index[i]:_name_index[i+1]]
+	return _name_name[_name_index[idx]:_name_index[idx+1]]
 }

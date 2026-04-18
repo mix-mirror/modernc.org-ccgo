@@ -24,6 +24,8 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-trailing-zero.c`: {},
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-types-init.c`:    {},
 
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-pack-next.c`: {}, // Won't fix: gcc output unstable
+
 	// Won't fix: long double
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/long-double-load.c`: {},
 

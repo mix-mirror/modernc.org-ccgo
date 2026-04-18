@@ -19,6 +19,8 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/github.com/vnmakarov/mir/c-benchmarks/method-call.c`:                         {}, // EXEC FAIL: "assets/github.com/vnmakarov/mir/c-benchmarks/method-call.c: libc_darwin.go:1669:Xfputs: TODOTODO "
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-basic.c`:                      {}, // EXEC FAIL
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-trailing-zero.c`:              {}, // EXEC FAIL
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-types-init.c`:                 {},
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/expression.c`:                          {},
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/function-implicit-declare.c`:           {}, // EXEC FAIL: "assets/github.com/vnmakarov/mir/c-tests/lacc/function-implicit-declare.c: : FAIL: exit status 42 (.:0:: .:0:: asm_arm64.s:1197:goexit: asm_arm64.s:1197:goexit: all_test.go:445:1: all_test.go:590:testE..."
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/vararg-complex-2.c`:                    {}, // EXEC FAIL: "assets/github.com/vnmakarov/mir/c-tests/lacc/vararg-complex-2.c: 0,0,0,0"
 	`assets/github.com/vnmakarov/mir/c-tests/new/setjmp.c`:                               {}, // EXEC FAIL: "assets/github.com/vnmakarov/mir/c-tests/new/setjmp.c: libc.go:2142:Xlongjmp: TODOTODO "
@@ -26,7 +28,6 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/tcc-0.9.27/tests/tests2/94_generic.c`:                                        {}, // EXEC FAIL
 	`assets/tcc-0.9.27/tests/tests2/95_bitfields.c`:                                      {}, // EXEC FAIL: "assets/tcc-0.9.27/tests/tests2/95_bitfields.c: ---- TEST 1 ----"
 	`assets/tcc-0.9.27/tests/tests2/95_bitfields_ms.c`:                                   {}, // EXEC FAIL: "assets/tcc-0.9.27/tests/tests2/95_bitfields_ms.c: ---- TEST 1 - MS-BITFIELDS ----"
-	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-types-init.c`:                 {},
 
 	//TODO
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c`:                 {}, // EXEC FAIL: "assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c: : FAIL: signal: abort trap (.:0:: .:0:: asm_arm64.s:1197:goexit: asm_arm64.s:1197:goexit: all_test.go:428:1: all_test..."

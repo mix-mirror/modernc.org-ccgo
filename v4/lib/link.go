@@ -22,6 +22,7 @@ import (
 
 	"golang.org/x/mod/semver"
 	"golang.org/x/tools/go/packages"
+	"modernc.org/ccgo/v4/lib/internal/secret_sauce"
 	"modernc.org/gc/v2"
 	"modernc.org/strutil"
 )
@@ -1189,6 +1190,15 @@ var _ %s.Pointer
 
 // Input must be formatted.
 func (l *linker) postProcess(fn string, b []byte) (r []byte) {
+	defer func() {
+		switch out, err := sauce.DeadVariableElimination(fn, r); {
+		case err != nil:
+			l.err(fmt.Errorf("%v: %v", fn, err))
+		default:
+			r = out
+		}
+	}()
+
 	lines := strings.Split(string(b), "\n")
 	var inFunc bool
 	w := 0

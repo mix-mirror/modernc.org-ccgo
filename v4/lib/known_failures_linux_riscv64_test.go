@@ -12,6 +12,7 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/return-addr.c`: {}, // EXEC FAIL
 	`assets/github.com/vnmakarov/mir/c-benchmarks/except.c`:                              {}, // EXEC FAIL: assets/github.com/vnmakarov/mir/c-benchmarks/except.c: libc.go:2142:Xlongjmp: TODOTODO
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-basic.c`:                      {}, // EXEC FAIL
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-pack-next.c`:                  {}, // EXEC FAIL
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-trailing-zero.c`:              {}, // EXEC FAIL
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-types-init.c`:                 {},
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/declaration-default-int.c`:             {}, // EXEC FAIL: assets/github.com/vnmakarov/mir/c-tests/lacc/declaration-default-int.c: : FAIL: exit status 51

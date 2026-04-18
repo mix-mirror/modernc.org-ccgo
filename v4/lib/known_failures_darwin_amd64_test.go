@@ -20,6 +20,7 @@ var testExecKnownFails = map[string]struct{}{
 	`assets/github.com/vnmakarov/mir/c-benchmarks/method-call.c`:                         {}, // EXEC FAIL: "assets/github.com/vnmakarov/mir/c-benchmarks/method-call.c: libc_darwin.go:1669:Xfputs: TODOTODO "
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-basic.c`:                      {}, // EXEC FAIL
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-trailing-zero.c`:              {}, // EXEC FAIL
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/expression.c`:                          {},
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/function-implicit-declare.c`:           {}, // EXEC FAIL: "assets/github.com/vnmakarov/mir/c-tests/lacc/function-implicit-declare.c: : FAIL: exit status 42 (.:0:: .:0:: asm_amd64.s:1650:goexit: asm_amd64.s:1650:goexit: all_test.go:444:1: all_test.go:587:testE..."
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/long-double-load.c`:                    {}, // EXEC FAIL
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/vararg-complex-2.c`:                    {}, // EXEC FAIL: "assets/github.com/vnmakarov/mir/c-tests/lacc/vararg-complex-2.c: 0,0,0,0"

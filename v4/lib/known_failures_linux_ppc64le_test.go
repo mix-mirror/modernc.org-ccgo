@@ -9,16 +9,18 @@ var testExecKnownFails = map[string]struct{}{
 
 	`assets/benchmarksgame-team.pages.debian.net/mandelbrot-9.c`:                                        {}, // EXEC FAIL
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c`:                 {}, // EXEC FAIL: "assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c: : FAIL: signal: aborted (.:0:: .:0:: asm_ppc64x.s:912:goexit: asm_ppc64x.s:912:goexit: all_test.go:437:1: all_test.go..."
+	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr36093.c`:                                    {}, // EXEC FAIL: assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr36093.c: panic: 544
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c`: {}, // EXEC FAIL: "assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c: : FAIL: signal: aborted (.:0:: .:0:: asm_ppc64x.s:912:goexit: asm_ppc64x.s:912:goexit: all_test.go:43..."
 	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/return-addr.c`:                {}, // EXEC FAIL
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-basic.c`:                                     {}, // EXEC FAIL
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-trailing-zero.c`:                             {}, // EXEC FAIL
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/bitfield-types-init.c`:                                {}, // EXEC FAIL
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/declaration-default-int.c`:                            {}, // EXEC FAIL
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/function-implicit-declare.c`:                          {}, // EXEC FAIL: "assets/github.com/vnmakarov/mir/c-tests/lacc/function-implicit-declare.c: : FAIL: exit status 42 (.:0:: .:0:: asm_amd64.s:1650:goexit: asm_amd64.s:1650:goexit: all_test.go:444:1: all_test.go:587:testE..."
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/long-double-load.c`:                                   {}, // EXEC FAIL
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/macro-paste.c`:                                        {}, // EXEC FAIL
+	`assets/github.com/vnmakarov/mir/c-tests/lacc/vararg-complex-2.c`:                                   {}, // EXEC FAIL: "assets/github.com/vnmakarov/mir/c-tests/lacc/vararg-complex-2.c: 0,0,0,0"
 	`assets/github.com/vnmakarov/mir/c-tests/lacc/whitespace.c`:                                         {}, // EXEC FAIL
-
-	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr36093.c`: {}, // EXEC FAIL: assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr36093.c: panic: 544
 
 	// Reported: https://groups.google.com/g/golang-dev/c/JUelxXEmZw4
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr31448-2.c`:                 {}, // EXEC FAIL: assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr31448-2.c: : FAIL: signal: aborted

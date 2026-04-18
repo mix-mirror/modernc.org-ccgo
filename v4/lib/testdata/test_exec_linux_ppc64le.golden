@@ -1125,6 +1125,7 @@ assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr34648.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr34688.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr34808.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr34885.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr34966.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr34993.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr35043.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr35171.c
@@ -1942,6 +1943,7 @@ assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030914-2.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030916-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030920-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030928-1.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20031003-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20031010-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20031011-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20031012-1.c
@@ -2082,6 +2084,7 @@ assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20100430-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20100708-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20100805-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20100827-1.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20101011-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20101013-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20101025-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20110418-1.c
@@ -3401,6 +3404,7 @@ assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20030914-2.
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20030916-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20030920-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20030928-1.c
+assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20031003-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20031010-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20031011-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20031012-1.c
@@ -3541,6 +3545,7 @@ assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20100430-1.
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20100708-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20100805-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20100827-1.c
+assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20101011-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20101013-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20101025-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20110418-1.c
@@ -4690,7 +4695,6 @@ assets/github.com/vnmakarov/mir/c-tests/lacc/convert-float-double.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/convert-int-float.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/convert-unsigned-float.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/copy-struct.c
-assets/github.com/vnmakarov/mir/c-tests/lacc/declaration-default-int.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/declarator-abstract.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/declarator-complex.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/declarator-parens.c
@@ -4723,7 +4727,6 @@ assets/github.com/vnmakarov/mir/c-tests/lacc/for-empty-expr.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/for-side-effects.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/for.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/function-char-args.c
-assets/github.com/vnmakarov/mir/c-tests/lacc/function-implicit-declare.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/function-pointer-call.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/function-pointer.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/function.c
@@ -4841,7 +4844,6 @@ assets/github.com/vnmakarov/mir/c-tests/lacc/unsigned-compare-ge.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/unsigned-compare.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/unsigned-sign-extend.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/vararg-complex-1.c
-assets/github.com/vnmakarov/mir/c-tests/lacc/vararg-complex-2.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/vararg.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/void-statement.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/zero-init.c

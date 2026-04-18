@@ -448,6 +448,7 @@ func (t *Task) cc(execCC, hostCC string, cflags []string) error {
 	set.Arg("build-lines", true, func(arg, val string) error { args.add(fmt.Sprintf("%s=%s", arg, val)); return nil })
 	set.Arg("compatibility_version", true, func(arg, val string) error { return nil })
 	set.Arg("current_version", false, func(arg, val string) error { return nil })
+	set.Arg("framework", false, func(arg, val string) error { args.add(fmt.Sprintf("%s=%s", arg, val)); return nil }) // darwin/clang
 	set.Arg("ggdb3", true, func(arg, val string) error { args.add(fmt.Sprintf("%s=%s", arg, val)); return nil })
 	set.Arg("gz", true, func(arg, val string) error { args.add(fmt.Sprintf("%s=%s", arg, val)); return nil })
 	set.Arg("idirafter", true, func(arg, val string) error { args.add(fmt.Sprintf("%s=%s", arg, val)); return nil })
@@ -466,6 +467,7 @@ func (t *Task) cc(execCC, hostCC string, cflags []string) error {
 	set.Opt("-version", func(arg string) error { args.add(arg); return nil })
 	set.Opt("E", func(arg string) error { optE = true; return nil })
 	set.Opt("MMD", func(arg string) error { return nil })
+	set.Opt("MP", func(arg string) error { args.add(arg); return nil })
 	set.Opt("Qunused-arguments", func(arg string) error { args.add(arg); return nil })
 	set.Opt("ansi", func(arg string) error { args.add(arg); return nil })
 	set.Opt("c", func(arg string) error { args.add(arg); return nil })
@@ -760,7 +762,12 @@ func (t *Task) ar(execAR, hostAR string) (err error) {
 	// 		}
 	// 	}
 	// }
-	cmd = exec.Command(hostAR, []string(args[1:])...)
+
+	// Apple recently broke ar(1), the workaround is to disble the symbol table.
+	var nargs []string
+	nargs = append(nargs, args[1], "-S")
+	nargs = append(nargs, []string(args[2:])...)
+	cmd = exec.Command(hostAR, nargs...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
