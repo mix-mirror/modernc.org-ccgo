@@ -3,6 +3,8 @@
 // license that can be found in the LICENSE file.
 
 // Command ccgo is a C compiler producing Go code.
+//
+// Please see README.md for details about the ccgo-generated code ABI.
 package main // import "modernc.org/ccgo/v4"
 
 import (

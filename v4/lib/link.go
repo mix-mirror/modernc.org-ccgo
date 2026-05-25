@@ -907,6 +907,7 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 	l.prologue(nm)
 	if !l.task.header {
 		l.w("\n\nimport (")
+		l.w("\n\t\"math\"")
 		switch nm := l.reflectName; nm {
 		case "reflect":
 			l.w("\n\t\"reflect\"")
@@ -919,9 +920,7 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 		default:
 			l.w("\n\t%s \"unsafe\"", nm)
 		}
-		if len(l.imports) != 0 {
-			l.w("\n")
-		}
+		l.w("\n")
 		for _, v := range l.imports {
 			l.w("\n\t")
 			if v.pkgName != v.qualifier {
@@ -943,6 +942,7 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 		l.w("\n)")
 		l.w(`
 
+var _ = math.Pi
 var _ %s.Type
 var _ %s.Pointer
 
@@ -1681,8 +1681,15 @@ func %s(f interface{}) uintptr {
 	type iface [2]uintptr
 	return (*iface)(unsafe.Pointer(&f))[1]
 }
+
 `, ccgoFP)
 	}
+	l.w(`
+
+func %s(n uintptr) unsafe.Pointer {
+	return unsafe.Pointer(&n)
+}
+`, ccgoUP)
 	var a []string
 	for k := range l.externVars {
 		a = append(a, k)

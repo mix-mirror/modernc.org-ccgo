@@ -80,7 +80,11 @@ func (c *ctx) initializer(w writer, n cc.Node, a []*cc.Initializer, t cc.Type, o
 			}
 		}
 		r = c.topExpr(w, in.AssignmentExpression, t, exprDefault)
-		if t.Kind() == cc.Ptr && c.initPatch != nil && (t.Kind() == cc.Ptr && t.(*cc.PointerType).Elem().Kind() == cc.Function || c.mentionsFunc(in.AssignmentExpression)) {
+
+		isFuncPtr := t.Kind() == cc.Ptr && t.(*cc.PointerType).Elem().Kind() == cc.Function || c.mentionsFunc(in.AssignmentExpression)
+		isCyclic := c.declBeingInitialized != nil && c.mentionsDecl(in.AssignmentExpression, c.declBeingInitialized)
+
+		if t.Kind() == cc.Ptr && c.initPatch != nil && (isFuncPtr || isCyclic) {
 			c.initPatch(off0, r)
 			var b buf
 			b.w("%s", zeroFuncPtr)
@@ -119,6 +123,17 @@ func (c *ctx) initializer(w writer, n cc.Node, a []*cc.Initializer, t cc.Type, o
 
 func (c *ctx) mentionsFunc(n cc.ExpressionNode) bool {
 	if n == nil {
+		return false
+	}
+
+	switch x := n.(type) {
+	case *cc.ExpressionList:
+		for ; x != nil; x = x.ExpressionList {
+			if c.mentionsFunc(x.AssignmentExpression) {
+				return true
+			}
+		}
+
 		return false
 	}
 
@@ -573,4 +588,27 @@ func (c *ctx) initializerUnionOne(w writer, n cc.Node, a []*cc.Initializer, t *c
 	}
 	b.w("}")
 	return &b
+}
+
+func (c *ctx) mentionsDecl(n cc.ExpressionNode, d *cc.Declarator) bool {
+	if n == nil || d == nil {
+		return false
+	}
+
+	target := d.Name()
+	var found bool
+
+	walkC(n, func(node cc.Node, mode int) {
+		if found || mode != walkPre {
+			return
+		}
+
+		// If the source code of this specific AST node exactly matches our identifier,
+		// we assume it's a cyclic reference.
+		if cc.NodeSource(node) == target {
+			found = true
+		}
+	})
+
+	return found
 }

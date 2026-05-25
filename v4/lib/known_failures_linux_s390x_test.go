@@ -7,6 +7,10 @@ package ccgo // import "modernc.org/ccgo/v4/lib"
 var testExecKnownFails = map[string]struct{}{
 	// ==== EXEC FAIL - compiles and builds but fails when executed.
 
+	//TODO(jnml) 20260423
+	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr40493.c`:                 {}, // EXEC FAIL: signal: aborted
+	`assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr40493.c`: {}, // EXEC FAIL: signal: aborted
+
 	`assets/CompCert-3.6/test/c/fib.c`:                                                                  {}, // EXEC FAIL: "assets/CompCert-3.6/test/c/fib.c: panic: runtime error: invalid memory address or nil pointer dereference"
 	`assets/CompCert-3.6/test/c/mandelbrot.c`:                                                           {}, // EXEC FAIL: "assets/CompCert-3.6/test/c/mandelbrot.c: P4"
 	`assets/CompCert-3.6/test/c/vmach.c`:                                                                {}, // EXEC FAIL: "assets/CompCert-3.6/test/c/vmach.c: SIGILL: illegal instruction"

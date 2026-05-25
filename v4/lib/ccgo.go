@@ -3,6 +3,8 @@
 // license that can be found in the LICENSE file.
 
 // Package ccgo implements the ccgo command.
+//
+// Please see README.md for details about the ccgo-generated code ABI.
 package ccgo // import "modernc.org/ccgo/v4/lib"
 
 //TODO Tucontext_t - Tucontext_t5
@@ -129,6 +131,7 @@ type Task struct {
 	header                       bool // -header
 	ignoreAsmErrors              bool // -ignore-asm-errors
 	ignoreLinkErrors             bool // -ignore-link-errors
+	ignoreStaticAsserts          bool // -ignore-static-asserts
 	ignoreNegativeShiftAmounts   bool // -ignore-negative-shift-amounts
 	ignoreUnsupportedAligment    bool // -ignore-unsupported-alignment
 	ignoreUnsupportedAtomicSizes bool // -ignore-unsupported-atomic-sizes
@@ -350,6 +353,7 @@ func (t *Task) main() (err error) {
 	set.Opt("ignore-asm-errors", func(arg string) error { t.ignoreAsmErrors = true; return nil })
 	set.Opt("ignore-link-errors", func(arg string) error { t.ignoreLinkErrors = true; return nil })
 	set.Opt("ignore-negative-shift-amounts", func(arg string) error { t.ignoreNegativeShiftAmounts = true; return nil })
+	set.Opt("ignore-static-asserts", func(arg string) error { t.ignoreStaticAsserts = true; return nil })
 	set.Opt("ignore-unsupported-alignment", func(arg string) error { t.ignoreUnsupportedAligment = true; return nil })
 	set.Opt("ignore-unsupported-atomic-sizes", func(arg string) error { t.ignoreUnsupportedAtomicSizes = true; return nil })
 	set.Opt("ignore-vector-functions", func(arg string) error { t.ignoreVectorFunctions = true; return nil })
@@ -584,6 +588,7 @@ func (t *Task) main() (err error) {
 	cfg.IgnoreNegativeShiftAmounts = t.ignoreNegativeShiftAmounts
 	cfg.UnsignedEnums = t.unsignedEnums
 	cfg.EvalAllMacros = t.evalAllMacros
+	cfg.IgnoreStaticAssert = t.ignoreStaticAsserts
 	if ldflag == "" {
 		if err = cfg.AdjustLongDouble(); err != nil {
 			return err

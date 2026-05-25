@@ -231,29 +231,30 @@ type jsonMeta struct {
 }
 
 type ctx struct {
-	anonTypes           map[cc.Type]string // C type: tXXX
-	ast                 *cc.AST
-	breakCtx            string
-	cfg                 *cc.Config
-	compoundStmtValue   string
-	continueCtx         string
-	defineTaggedStructs map[string]*cc.StructType
-	defineTaggedUnions  map[string]*cc.UnionType
-	eh                  errHandler
-	enumerators         nameSet
-	exprNestLevel       int
-	exprStmtLevel       int
-	externsDeclared     map[string]*cc.Declarator
-	externsDefined      map[string]cc.Node
-	externsMentioned    map[string]struct{}
-	f                   *fnCtx
-	fields              map[fielder]*nameSpace
-	fn                  *cc.Declarator
-	ifn                 string
-	imports             map[string]string // import path: qualifier
-	initPatch           func(int64, *buf)
-	inlineFuncs         map[*cc.Declarator]*cc.FunctionDefinition
-	inlineLabelSuffix   int
+	anonTypes            map[cc.Type]string // C type: tXXX
+	ast                  *cc.AST
+	breakCtx             string
+	cfg                  *cc.Config
+	compoundStmtValue    string
+	continueCtx          string
+	declBeingInitialized *cc.Declarator
+	defineTaggedStructs  map[string]*cc.StructType
+	defineTaggedUnions   map[string]*cc.UnionType
+	eh                   errHandler
+	enumerators          nameSet
+	exprNestLevel        int
+	exprStmtLevel        int
+	externsDeclared      map[string]*cc.Declarator
+	externsDefined       map[string]cc.Node
+	externsMentioned     map[string]struct{}
+	f                    *fnCtx
+	fields               map[fielder]*nameSpace
+	fn                   *cc.Declarator
+	ifn                  string
+	imports              map[string]string // import path: qualifier
+	initPatch            func(int64, *buf)
+	inlineFuncs          map[*cc.Declarator]*cc.FunctionDefinition
+	inlineLabelSuffix    int
 	jsonMeta
 	macrosEmited  nameSet
 	maxAlign      int

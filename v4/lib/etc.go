@@ -770,41 +770,61 @@ func firstToken(n cc.Node, r *cc.Token) {
 		return
 	}
 
-	if x, ok := n.(*cc.LabeledStatement); ok && x != nil {
-		t := x.Token
-		if r.Seq() == 0 || t.Seq() < r.Seq() {
-			*r = t
-		}
-		return
-	}
+	// Heap-allocated stack. Earlier we used a goroutine call stack causing issues
+	// on 32 bit targets.
+	stack := []cc.Node{n}
 
-	if x, ok := n.(cc.Token); ok && x.Seq() != 0 {
-		if r.Seq() == 0 || x.Seq() < r.Seq() {
-			*r = x
-		}
-		return
-	}
+	for len(stack) > 0 {
+		// Pop the top node
+		curr := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
 
-	t := reflect.TypeOf(n)
-	v := reflect.ValueOf(n)
-	var zero reflect.Value
-	if t.Kind() == reflect.Pointer {
-		t = t.Elem()
-		v = v.Elem()
-	}
-	if v == zero || v.IsZero() || t.Kind() != reflect.Struct {
-		return
-	}
-
-	nf := t.NumField()
-	for i := 0; i < nf; i++ {
-		f := t.Field(i)
-		if !f.IsExported() {
+		if curr == nil {
 			continue
 		}
 
-		if m, ok := v.Field(i).Interface().(cc.Node); ok {
-			firstToken(m, r)
+		if x, ok := curr.(*cc.LabeledStatement); ok && x != nil {
+			t := x.Token
+			if r.Seq() == 0 || t.Seq() < r.Seq() {
+				*r = t
+			}
+			continue
+		}
+
+		if x, ok := curr.(cc.Token); ok && x.Seq() != 0 {
+			if r.Seq() == 0 || x.Seq() < r.Seq() {
+				*r = x
+			}
+			continue
+		}
+
+		t := reflect.TypeOf(curr)
+		v := reflect.ValueOf(curr)
+		var zero reflect.Value
+
+		if t.Kind() == reflect.Pointer {
+			t = t.Elem()
+			v = v.Elem()
+		}
+
+		if v == zero || v.IsZero() || t.Kind() != reflect.Struct {
+			continue
+		}
+
+		nf := t.NumField()
+
+		// CRITICAL: Push fields onto the stack in reverse order.
+		// This ensures they are popped and processed left-to-right,
+		// perfectly preserving the original recursive traversal order.
+		for i := nf - 1; i >= 0; i-- {
+			f := t.Field(i)
+			if !f.IsExported() {
+				continue
+			}
+
+			if m, ok := v.Field(i).Interface().(cc.Node); ok {
+				stack = append(stack, m)
+			}
 		}
 	}
 }
@@ -837,49 +857,98 @@ func unresolvedSymbols(ast *gc.SourceFile) (r map[string]token.Position) {
 	return r
 }
 
-func walk(n interface{}, fn func(n gc.Node, pre bool, arg interface{}), arg interface{}) {
-	if n == nil {
+type walkFrame struct {
+	n       interface{}
+	visited bool
+}
+
+func walk(root interface{}, fn func(n gc.Node, pre bool, arg interface{}), arg interface{}) {
+	if root == nil {
 		return
 	}
 
-	if x, ok := n.(gc.Token); ok {
-		if x.IsValid() {
-			fn(x, true, arg)
+	stack := []walkFrame{{n: root, visited: false}}
+
+	for len(stack) > 0 {
+		currIdx := len(stack) - 1
+		frame := stack[currIdx]
+		n := frame.n
+
+		if n == nil {
+			stack = stack[:currIdx] // pop
+			continue
 		}
-		return
-	}
 
-	t := reflect.TypeOf(n)
-	v := reflect.ValueOf(n)
-	if t.Kind() == reflect.Pointer {
-		t = t.Elem()
-		v = v.Elem()
-	}
-	if v == zeroReflectValue || v.IsZero() {
-		return
-	}
+		// If we've already processed the children of a struct, do the post-order logic
+		if frame.visited {
+			stack = stack[:currIdx] // pop
 
-	switch t.Kind() {
-	case reflect.Struct:
-		if x, ok := n.(gc.Node); ok {
-			fn(x, true, arg)
-		}
-		nf := t.NumField()
-		for i := 0; i < nf; i++ {
-			f := t.Field(i)
-			if !f.IsExported() {
-				continue
+			t := reflect.TypeOf(n)
+			if t.Kind() == reflect.Pointer {
+				t = t.Elem()
 			}
 
-			walk(v.Field(i).Interface(), fn, arg)
+			// Only structs have the post-order hook in the original logic
+			if t.Kind() == reflect.Struct {
+				if x, ok := n.(gc.Node); ok {
+					fn(x, false, arg)
+				}
+			}
+			continue
 		}
-		if x, ok := n.(gc.Node); ok {
-			fn(x, false, arg)
+
+		if x, ok := n.(gc.Token); ok {
+			if x.IsValid() {
+				fn(x, true, arg)
+			}
+			stack = stack[:currIdx] // pop immediately
+			continue
 		}
-	case reflect.Slice:
-		ne := v.Len()
-		for i := 0; i < ne; i++ {
-			walk(v.Index(i).Interface(), fn, arg)
+
+		t := reflect.TypeOf(n)
+		v := reflect.ValueOf(n)
+		if t.Kind() == reflect.Pointer {
+			t = t.Elem()
+			v = v.Elem()
+		}
+
+		if v == zeroReflectValue || v.IsZero() {
+			stack = stack[:currIdx] // pop
+			continue
+		}
+
+		switch t.Kind() {
+		case reflect.Struct:
+			// Mark as visited for the post-order step later
+			stack[currIdx].visited = true
+
+			if x, ok := n.(gc.Node); ok {
+				fn(x, true, arg)
+			}
+
+			nf := t.NumField()
+			// Push children in reverse order
+			for i := nf - 1; i >= 0; i-- {
+				f := t.Field(i)
+				if !f.IsExported() {
+					continue
+				}
+				stack = append(stack, walkFrame{n: v.Field(i).Interface(), visited: false})
+			}
+
+		case reflect.Slice:
+			// Slices don't have a post-order callback in the original code,
+			// so we pop the slice itself right away.
+			stack = stack[:currIdx]
+
+			ne := v.Len()
+			// Push elements in reverse order
+			for i := ne - 1; i >= 0; i-- {
+				stack = append(stack, walkFrame{n: v.Index(i).Interface(), visited: false})
+			}
+
+		default:
+			stack = stack[:currIdx] // pop anything else we don't process
 		}
 	}
 }
@@ -1022,38 +1091,73 @@ const (
 	walkPost
 )
 
-func walkC(n cc.Node, fn func(n cc.Node, mode int)) {
-	if n == nil {
+type walkCFrame struct {
+	n       cc.Node
+	visited bool
+}
+
+func walkC(root cc.Node, fn func(n cc.Node, mode int)) {
+	if root == nil {
 		return
 	}
 
-	if _, ok := n.(cc.Token); ok {
-		fn(n, walkTok)
-		return
-	}
+	// Initialize our heap-allocated stack
+	stack := []walkCFrame{{n: root, visited: false}}
 
-	t := reflect.TypeOf(n)
-	v := reflect.ValueOf(n)
-	if t.Kind() == reflect.Pointer {
-		t = t.Elem()
-		v = v.Elem()
-	}
-	if v == zeroReflectValue || v.IsZero() || t.Kind() != reflect.Struct {
-		return
-	}
+	for len(stack) > 0 {
+		currIdx := len(stack) - 1
+		frame := stack[currIdx]
+		n := frame.n
 
-	fn(n, walkPre)
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		if !f.IsExported() {
+		if n == nil {
+			stack = stack[:currIdx] // pop
 			continue
 		}
 
-		if m, ok := v.Field(i).Interface().(cc.Node); ok {
-			walkC(m, fn)
+		// If we've already processed this node's children, do the post-order logic
+		if frame.visited {
+			stack = stack[:currIdx] // pop
+			fn(n, walkPost)
+			continue
+		}
+
+		// If it's a token, process it and pop immediately (no children)
+		if _, ok := n.(cc.Token); ok {
+			fn(n, walkTok)
+			stack = stack[:currIdx] // pop
+			continue
+		}
+
+		t := reflect.TypeOf(n)
+		v := reflect.ValueOf(n)
+		if t.Kind() == reflect.Pointer {
+			t = t.Elem()
+			v = v.Elem()
+		}
+
+		if v == zeroReflectValue || v.IsZero() || t.Kind() != reflect.Struct {
+			stack = stack[:currIdx] // pop
+			continue
+		}
+
+		// Mark current frame as visited so we hit the walkPost block next time
+		stack[currIdx].visited = true
+
+		// Pre-order processing
+		fn(n, walkPre)
+
+		// Push fields in reverse order so they are popped left-to-right
+		for i := t.NumField() - 1; i >= 0; i-- {
+			f := t.Field(i)
+			if !f.IsExported() {
+				continue
+			}
+
+			if m, ok := v.Field(i).Interface().(cc.Node); ok {
+				stack = append(stack, walkCFrame{n: m, visited: false})
+			}
 		}
 	}
-	fn(n, walkPost)
 }
 
 func shell0(shellTime time.Duration, echo bool, cmd string, args ...string) ([]byte, error) {

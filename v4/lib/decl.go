@@ -1294,10 +1294,13 @@ func (c *ctx) initDeclaratorInit(w writer, sep string, info *declInfo, d *cc.Dec
 			return
 		}
 
+		c.declBeingInitialized = d
+
 		var initPatches []initPatch
 		c.initPatch = func(off int64, b *buf) { initPatches = append(initPatches, initPatch{d, off, b}) }
 
 		defer func() {
+			c.declBeingInitialized = nil
 			c.initPatch = nil
 			if len(initPatches) == 0 {
 				return
@@ -1367,7 +1370,7 @@ func (c *ctx) initDeclaratorInit(w writer, sep string, info *declInfo, d *cc.Dec
 					break
 				}
 
-				w.w("%s%s*(*%s)(%s) = %s;", sep, c.posComment(d), c.typ(d, t), unsafePointer(bpOff(info.bpOff)), c.initializerOuter(w, initializer, t))
+				w.w("%s%s**(**%s)(%s%s(%s)) = %s;", sep, c.posComment(d), c.typ(d, t), tag(preserve), ccgoUP, bpOff(info.bpOff), c.initializerOuter(w, initializer, t))
 			}
 		default:
 			switch {

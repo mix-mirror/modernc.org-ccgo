@@ -24,9 +24,11 @@ var (
 
 func init() {
 	var err error
-	if logf, err = os.OpenFile("/tmp/ccgo.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY|os.O_SYNC, 0644); err != nil {
+	logPath := filepath.Join(os.TempDir(), "ccgo.log")
+	if logf, err = os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY|os.O_SYNC, 0644); err != nil {
 		panic(err.Error())
 	}
+
 	dmesg("init()")
 }
 

@@ -488,6 +488,8 @@ func (t *Task) cc(execCC, hostCC string, cflags []string) error {
 	set.Opt("g", func(arg string) error { return nil })
 	set.Opt("headerpad_max_install_names", func(arg string) error { args.add(arg); return nil })
 	set.Opt("ignore-link-errors", func(arg string) error { args.add(arg); return nil })
+	set.Opt("ignore-static-asserts", func(arg string) error { args.add(arg); return nil })
+	set.Opt("", func(arg string) error { args.add(arg); return nil })
 	set.Opt("m32", func(arg string) error { args.add(arg); return nil })
 	set.Opt("m64", func(arg string) error { args.add(arg); return nil })
 	set.Opt("mconsole", func(arg string) error { args.add(arg); return nil })
