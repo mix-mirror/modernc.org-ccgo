@@ -8,7 +8,9 @@ package ccgo // import "modernc.org/ccgo/v4/lib"
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
+	"math"
 	"reflect"
 	"sort"
 
@@ -390,6 +392,10 @@ func (c *ctx) initializerUnion(w writer, n cc.Node, a []*cc.Initializer, t *cc.U
 		return &b
 	}
 
+	if r := c.compactUnionInit(n, a, t, off0); r != nil {
+		return r
+	}
+
 	switch len(a) {
 	case 1:
 		b.w("(*(*%s)(%sunsafe.%sPointer(&struct{ ", c.typ(n, t), tag(importQualifier), tag(preserve))
@@ -588,6 +594,175 @@ func (c *ctx) initializerUnionOne(w writer, n cc.Node, a []*cc.Initializer, t *c
 	}
 	b.w("}")
 	return &b
+}
+
+// compactUnionInit renders a non-zero, multi-field union initializer as a
+// compact reinterpreted word-array literal
+//
+//	(*(*T)(unsafe.Pointer(&[K]uintW{...})))
+//
+// instead of the verbose per-element inline-struct form produced by
+// initializerUnionOne / initializerUnionMany (which costs ~15 gofmt'd lines per
+// element for aggregate-active-member unions, see issue #46). It succeeds only
+// when every leaf initializer is a compile-time-constant, non-pointer,
+// non-bitfield scalar, i.e. pure data with no relocations. For anything else
+// (function pointers, address constants, self-referencing/cyclic initializers,
+// bitfields, strings, complex, long double, ...) it returns nil and the caller
+// falls back to the verbose form, which keeps the existing initPatch deferral
+// working.
+//
+// The word width W equals the union's alignment (1, 2, 4 or 8), so the backing
+// literal is at least as aligned as the union itself. Each word is decoded from
+// the raw image using the target byte order, so the in-memory bytes on the
+// target reproduce the image regardless of endianness; the emitted literals
+// differ between little- and big-endian targets, as ccgo already emits
+// per-target output.
+func (c *ctx) compactUnionInit(n cc.Node, a []*cc.Initializer, t *cc.UnionType, off0 int64) *buf {
+	size := t.Size()
+	al := int64(t.Align())
+	if size <= 0 || al <= 0 || al > 8 || size%al != 0 {
+		return nil
+	}
+
+	bo := c.ast.ABI.ByteOrder
+	img := make([]byte, size)
+	for _, in := range a {
+		if f := in.Field(); f != nil && f.IsBitfield() {
+			return nil
+		}
+
+		ft := in.Type()
+		fsz := ft.Size()
+		rel := in.Offset() - off0
+		if fsz <= 0 || rel < 0 || rel+fsz > size || in.AssignmentExpression == nil {
+			return nil
+		}
+
+		if !encodeScalarConst(img[rel:rel+fsz], in.AssignmentExpression.Value(), ft, bo) {
+			return nil
+		}
+	}
+
+	var b buf
+	b.w("(*(*%s)(%sunsafe.%sPointer(&", c.typ(n, t), tag(importQualifier), tag(preserve))
+	w := int(al)
+	b.w("[%d]%suint%d{", size/al, tag(preserve), w*8)
+	for i := 0; i < len(img); i += w {
+		if i != 0 {
+			b.w(", ")
+		}
+
+		var v uint64
+		switch w {
+		case 1:
+			v = uint64(img[i])
+		case 2:
+			v = uint64(bo.Uint16(img[i:]))
+		case 4:
+			v = uint64(bo.Uint32(img[i:]))
+		case 8:
+			v = bo.Uint64(img[i:])
+		}
+		b.w("%#x", v)
+	}
+	b.w("})))")
+	return &b
+}
+
+// encodeScalarConst writes the target-endian byte representation of the
+// compile-time-constant scalar value v (of C type t) into dst, which must be
+// exactly t.Size() bytes long. It returns false for anything that cannot be
+// rendered as a fixed byte pattern: pointers/relocations, strings, complex,
+// long double, __int128, _Float16/_Float128 or any non-constant (unknown)
+// value.
+func encodeScalarConst(dst []byte, v cc.Value, t cc.Type, bo binary.ByteOrder) bool {
+	switch t.Kind() {
+	case cc.Bool:
+		u, ok := scalarUint64(v)
+		if !ok {
+			return false
+		}
+
+		if u != 0 {
+			u = 1 // _Bool normalizes any nonzero value to 1.
+		}
+
+		putUintBytes(dst, u, bo)
+		return true
+	case
+		cc.Char, cc.SChar, cc.UChar, cc.Short, cc.UShort,
+		cc.Int, cc.UInt, cc.Long, cc.ULong, cc.LongLong, cc.ULongLong, cc.Enum:
+
+		u, ok := scalarUint64(v)
+		if !ok {
+			return false
+		}
+
+		putUintBytes(dst, u, bo)
+		return true
+	case cc.Float, cc.Float32:
+		f, ok := scalarFloat64(v)
+		if !ok || len(dst) != 4 {
+			return false
+		}
+
+		putUintBytes(dst, uint64(math.Float32bits(float32(f))), bo)
+		return true
+	case cc.Double, cc.Float64:
+		f, ok := scalarFloat64(v)
+		if !ok || len(dst) != 8 {
+			return false
+		}
+
+		putUintBytes(dst, math.Float64bits(f), bo)
+		return true
+	default:
+		return false
+	}
+}
+
+// scalarUint64 returns the integer value of a constant integer/enum/bool value.
+func scalarUint64(v cc.Value) (uint64, bool) {
+	switch x := v.(type) {
+	case cc.Int64Value:
+		return uint64(x), true
+	case cc.UInt64Value:
+		return uint64(x), true
+	case *cc.ZeroValue:
+		return 0, true
+	default:
+		return 0, false
+	}
+}
+
+// scalarFloat64 returns the value of a constant float/integer value as float64.
+func scalarFloat64(v cc.Value) (float64, bool) {
+	switch x := v.(type) {
+	case cc.Float64Value:
+		return float64(x), true
+	case cc.Int64Value:
+		return float64(x), true
+	case cc.UInt64Value:
+		return float64(x), true
+	case *cc.ZeroValue:
+		return 0, true
+	default:
+		return 0, false
+	}
+}
+
+// putUintBytes stores the low len(dst) bytes of u into dst using byte order bo.
+func putUintBytes(dst []byte, u uint64, bo binary.ByteOrder) {
+	le := bo == binary.LittleEndian
+	n := len(dst)
+	for i := 0; i < n; i++ {
+		b := byte(u >> (8 * i))
+		if le {
+			dst[i] = b
+		} else {
+			dst[n-1-i] = b
+		}
+	}
 }
 
 func (c *ctx) mentionsDecl(n cc.ExpressionNode, d *cc.Declarator) bool {
