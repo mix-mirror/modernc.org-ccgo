@@ -440,6 +440,17 @@ type parallel struct {
 
 func newParallel(resultTag string) *parallel {
 	limit := runtime.GOMAXPROCS(0)
+	if runtime.GOOS == "netbsd" {
+		// NetBSD's Go linker races internally when it runs multi-threaded,
+		// intermittently failing with "missing section for relocation target".
+		// Cap our worker pool to 1 AND make every `go build` subprocess run
+		// single-threaded: ccgo's link step inherits os.Environ() (see
+		// link.go), so exporting GOMAXPROCS=1 here reaches the linker. Both are
+		// needed — the pool cap alone leaves each linker multi-threaded and the
+		// flake survives. Together they make the suite deterministic on netbsd.
+		limit = 1
+		os.Setenv("GOMAXPROCS", "1")
+	}
 	return &parallel{
 		limit:     make(chan struct{}, limit),
 		resultTag: resultTag,
