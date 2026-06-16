@@ -87,7 +87,6 @@ int main() {
 			"--prefix-field=F",
 			"-ignore-unsupported-alignment",
 			"-ignore-vector-functions",
-			"-keep-object-files",
 			"-positions",
 			"-full-paths",
 			cFile,
