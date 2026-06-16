@@ -97,9 +97,7 @@ int main() {
 	if err := task.Main(); err != nil {
 		t.Fatalf("ccgo failed:\nstdout: %s\nstderr: %s\nerr: %v", stdout.Bytes(), stderr.Bytes(), err)
 	}
-	if !t.Failed() {
-		t.Logf("ccgo OK")
-	}
+	t.Logf("ccgo OK")
 
 	// ---- Step 3: Build Go binary ----
 	if err := inDir(dir, func() error {
