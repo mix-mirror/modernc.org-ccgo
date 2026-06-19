@@ -65,7 +65,7 @@ int main() {
 	}
 
 	// ---- Step 1: Compile & run with hostCC ----
-	bin := filepath.Join(dir, "cbin")
+	bin := filepath.Join(dir, enforceBinaryExt("cbin"))
 	if out, err := exec.Command(hostCC, "-o", bin, "-w", cFile, "-lm", "-lpthread").CombinedOutput(); err != nil {
 		t.Fatalf("hostCC failed: %v\n%s", err, out)
 	}
@@ -106,7 +106,7 @@ int main() {
 		if out, err := exec.Command("go", "get", *oLibc+libcVersion).CombinedOutput(); err != nil {
 			return fmt.Errorf("go get: %v\n%s", err, out)
 		}
-		goBin := filepath.Join(dir, "gobin")
+		goBin := filepath.Join(dir, enforceBinaryExt("gobin"))
 		if out, err := exec.Command("go", "build", "-o", goBin, goFile).CombinedOutput(); err != nil {
 			return fmt.Errorf("go build: %v\n%s", err, out)
 		}
@@ -116,7 +116,7 @@ int main() {
 	}
 
 	// ---- Step 4: Run Go binary ----
-	goBin := filepath.Join(dir, "gobin")
+	goBin := filepath.Join(dir, enforceBinaryExt("gobin"))
 	goOut, err := exec.Command(goBin).Output()
 	if err != nil {
 		t.Fatalf("Go binary failed: %v", err)
@@ -125,6 +125,14 @@ int main() {
 	// ---- Step 5: Compare outputs ----
 	cOut = bytes.TrimSpace(cOut)
 	goOut = bytes.TrimSpace(goOut)
+	// Normalize CRLF -> LF: on Windows the hostCC binary writes text-mode
+	// stdout (\r\n) while ccgo's libc emits \n. TestExec does the same.
+	if bytes.Contains(cOut, []byte("\r\n")) {
+		cOut = bytes.ReplaceAll(cOut, []byte("\r"), nil)
+	}
+	if bytes.Contains(goOut, []byte("\r\n")) {
+		goOut = bytes.ReplaceAll(goOut, []byte("\r"), nil)
+	}
 	if !bytes.Equal(cOut, goOut) {
 		t.Fatalf("output mismatch\nC:  %q\nGo: %q", cOut, goOut)
 	}
