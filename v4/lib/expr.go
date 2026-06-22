@@ -4696,6 +4696,17 @@ out:
 			if c.exprStmtLevel == 1 {
 				b.w("%s", v)
 			}
+			// A statement-expression performs no volatile/atomic memory
+			// access at its own level: any such access inside the compound
+			// statement is emitted by the inner expression handlers and the
+			// result is surfaced through the plain local autovar v. The node
+			// can nevertheless carry a volatile/atomic-qualified type (e.g.
+			// glibc's <stdatomic.h> atomic_load_explicit/atomic_exchange
+			// expand to ({ ...; __atomic_load(p, &tmp, mo); tmp; })), so mark
+			// it handled to satisfy the check in expr.
+			if isVolatileOrAtomicExpr {
+				b.volatileOrAtomicHandled = true
+			}
 		}
 	case cc.PrimaryExpressionGeneric: // GenericSelection
 		return c.expr0(w, n.GenericSelection.Associated().AssignmentExpression, n.Type(), mode)

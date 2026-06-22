@@ -1,6 +1,42 @@
 # Handoff: complete the C11 `<stdatomic.h>` lowering (`__atomic_load` / `__atomic_exchange`)
 
-Status: open. Verified against ccgo `v4.34.4-20-g87f6a6a`.
+Status: **RESOLVED** on branch `wa2go`. Opened against ccgo `v4.34.4-20-g87f6a6a`.
+
+## Resolution
+
+The blocker was **not** in `stdatomicLoad` / `stdatomicExchange` — those handlers
+already lowered correctly to the width-specific libc helpers
+(`libc.X__atomic_loadUint32`, `libc.X__atomic_exchangeInt64`, …) via the
+out-parameter ABI. The real gap was one level up: the **GNU statement-expression**
+that the glibc macros wrap the builtins in could not be surfaced as a value.
+
+`atomic_load_explicit` / `atomic_exchange` expand to
+`({ …; __atomic_load(p, &tmp, mo); tmp; })`. The yielded `tmp` has type
+`__typeof__((void)0, *p)`, which cc/v4 keeps volatile/atomic-qualified, so
+`isVolatileOrAtomicExpr(n)` is true for the whole `*cc.PrimaryExpression`
+statement-expression. The `PrimaryExpressionStmt` handler in `expr.go` already
+surfaces the value correctly (through the plain local autovar `v`), but it never
+set `volatileOrAtomicHandled`, so the guard in `(*ctx).expr` (`expr.go:117-119`)
+fired the TODO. `atomic_store_explicit` was unaffected because its
+statement-expression is void-typed (nothing to surface).
+
+Fix: in the `PrimaryExpressionStmt` handler, mark the result handled when the
+node carries a volatile/atomic type — a statement-expression performs no volatile
+access *at its own level*; any access inside is emitted (and flagged) by the
+inner expression handlers, and the result flows out through `v`. One guarded
+`b.volatileOrAtomicHandled = true`. This fixes the whole class of value-yielding
+volatile/atomic-typed statement-expressions, not just these two builtins.
+
+Verified (translate → `go build` → run): the two reproducers below; a
+store-5/fetch_add-3/load→8 / exchange→old-8-leaves-1 program; all of
+1/2/4/8-byte signed+unsigned widths; the clang `__c11_atomic_*` spelling (which
+took a different, already-working direct-call path); and the wasm2c-style
+`(_Atomic volatile T*)(mem+addr)` cast-into-buffer pattern. No golden drift
+attributable to the change.
+
+---
+
+Original report (for context):
 
 ## TL;DR
 
