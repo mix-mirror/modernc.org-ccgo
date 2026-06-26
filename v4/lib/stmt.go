@@ -671,30 +671,57 @@ func (c *ctx) notSetJmp(w writer, n *cc.SelectionStatement) (r bool) {
 
 	v := c.f.newAutovarType(n, c.pvoid)
 	jb := c.expr(w, arg, nil, exprDefault)
+	pp := tag(preserve)
 	w.w("\n%s = %s;", v, jb)
-	w.w("\n%stls.%[1]sPushJumpBuffer(%s)", tag(preserve), v)
-
-	func() {
-		c.f.inDefer++
-
-		defer func() { c.f.inDefer-- }()
-
-		w.w("\ndefer func() {")
-		w.w("\nswitch %srecover().(%[1]stype) {", tag(preserve))
-		w.w("\ncase %s%sLongjmpRetval:", c.task.tlsQualifier, tag(preserve))
-		if n.Statement2 != nil {
-			w.w("\n{")
-			c.statement(w, n.Statement2)
-			w.w("\n};")
-		}
-		w.w("%sdefault:", tag(preserve))
-		w.w("\n%stls.%[1]sPopJumpBuffer(%s)", tag(preserve), v)
-		w.w("\n}")
-		w.w("\n}();")
-	}()
-
-	w.w("\n{")
+	w.w("\n%stls.%sPushJumpBuffer(%s)", pp, pp, v)
+	if c.stmtHasJump(n.Statement) {
+		// The try contains a return/goto/break/continue that the closure form
+		// below cannot host. Fall back to the original form — the catch runs in
+		// the recovering defer. (That form does not propagate a value-producing
+		// catch into the code following the if, but it preserves prior behavior;
+		// wasm2c's exception output has no such jumps in the try.)
+		func() {
+			c.f.inDefer++
+			defer func() { c.f.inDefer-- }()
+			w.w("\ndefer func() {")
+			w.w("\nswitch %srecover().(%stype) {", pp, pp)
+			w.w("\ncase %s%sLongjmpRetval:", c.task.tlsQualifier, pp)
+			if n.Statement2 != nil {
+				w.w("\n{")
+				c.statement(w, n.Statement2)
+				w.w("\n};")
+			}
+			w.w("\n%sdefault:", pp)
+			w.w("\n%stls.%sPopJumpBuffer(%s)", pp, pp, v)
+			w.w("\n}")
+			w.w("\n}();")
+		}()
+		w.w("\n{")
+		c.statement(w, n.Statement)
+		w.w("\n};")
+		return true
+	}
+	// Run the try (Statement) inside a closure that recovers a longjmp and
+	// reports whether it was caught. The catch (Statement2) then runs at this
+	// level — not inside the recovering defer — so its effects (notably the
+	// function's result value) reach the code that follows the if, just as in
+	// the original C. On normal completion the jump buffer is popped here; on a
+	// longjmp Longjmp has already popped it.
+	w.w("\nif (func() (%scaught %sbool) {", pp, pp)
+	w.w("\ndefer func() {")
+	w.w("\nswitch %srecover().(%stype) {", pp, pp)
+	w.w("\ncase %s%sLongjmpRetval:", c.task.tlsQualifier, pp)
+	w.w("\n%scaught = %strue", pp, pp)
+	w.w("\n%sdefault:", pp)
+	w.w("\n%stls.%sPopJumpBuffer(%s)", pp, pp, v)
+	w.w("\n}")
+	w.w("\n}();")
 	c.statement(w, n.Statement)
+	w.w("\nreturn %sfalse", pp)
+	w.w("\n}()) {")
+	if n.Statement2 != nil {
+		c.statement(w, n.Statement2)
+	}
 	w.w("\n};")
 	return true
 }
@@ -740,30 +767,57 @@ func (c *ctx) setJmpEq0(w writer, n *cc.SelectionStatement) (r bool) {
 
 	v := c.f.newAutovarType(n, c.pvoid)
 	jb := c.expr(w, arg, nil, exprDefault)
+	pp := tag(preserve)
 	w.w("\n%s = %s;", v, jb)
-	w.w("\n%stls.%[1]sPushJumpBuffer(%s)", tag(preserve), v)
-
-	func() {
-		c.f.inDefer++
-
-		defer func() { c.f.inDefer-- }()
-
-		w.w("\ndefer func() {")
-		w.w("\nswitch %srecover().(%[1]stype) {", tag(preserve))
-		w.w("\ncase %s%sLongjmpRetval:", c.task.tlsQualifier, tag(preserve))
-		if n.Statement2 != nil {
-			w.w("\n{")
-			c.statement(w, n.Statement2)
-			w.w("\n};")
-		}
-		w.w("%sdefault:", tag(preserve))
-		w.w("\n%stls.%[1]sPopJumpBuffer(%s)", tag(preserve), v)
-		w.w("\n}")
-		w.w("\n}();")
-	}()
-
-	w.w("\n{")
+	w.w("\n%stls.%sPushJumpBuffer(%s)", pp, pp, v)
+	if c.stmtHasJump(n.Statement) {
+		// The try contains a return/goto/break/continue that the closure form
+		// below cannot host. Fall back to the original form — the catch runs in
+		// the recovering defer. (That form does not propagate a value-producing
+		// catch into the code following the if, but it preserves prior behavior;
+		// wasm2c's exception output has no such jumps in the try.)
+		func() {
+			c.f.inDefer++
+			defer func() { c.f.inDefer-- }()
+			w.w("\ndefer func() {")
+			w.w("\nswitch %srecover().(%stype) {", pp, pp)
+			w.w("\ncase %s%sLongjmpRetval:", c.task.tlsQualifier, pp)
+			if n.Statement2 != nil {
+				w.w("\n{")
+				c.statement(w, n.Statement2)
+				w.w("\n};")
+			}
+			w.w("\n%sdefault:", pp)
+			w.w("\n%stls.%sPopJumpBuffer(%s)", pp, pp, v)
+			w.w("\n}")
+			w.w("\n}();")
+		}()
+		w.w("\n{")
+		c.statement(w, n.Statement)
+		w.w("\n};")
+		return true
+	}
+	// Run the try (Statement) inside a closure that recovers a longjmp and
+	// reports whether it was caught. The catch (Statement2) then runs at this
+	// level — not inside the recovering defer — so its effects (notably the
+	// function's result value) reach the code that follows the if, just as in
+	// the original C. On normal completion the jump buffer is popped here; on a
+	// longjmp Longjmp has already popped it.
+	w.w("\nif (func() (%scaught %sbool) {", pp, pp)
+	w.w("\ndefer func() {")
+	w.w("\nswitch %srecover().(%stype) {", pp, pp)
+	w.w("\ncase %s%sLongjmpRetval:", c.task.tlsQualifier, pp)
+	w.w("\n%scaught = %strue", pp, pp)
+	w.w("\n%sdefault:", pp)
+	w.w("\n%stls.%sPopJumpBuffer(%s)", pp, pp, v)
+	w.w("\n}")
+	w.w("\n}();")
 	c.statement(w, n.Statement)
+	w.w("\nreturn %sfalse", pp)
+	w.w("\n}()) {")
+	if n.Statement2 != nil {
+		c.statement(w, n.Statement2)
+	}
 	w.w("\n};")
 	return true
 }
@@ -783,6 +837,28 @@ func (c *ctx) isNot(n cc.ExpressionNode) (arg cc.ExpressionNode) {
 			// panic(todo("%v: %T %s", n.Position(), x, cc.NodeSource(n)))
 		}
 	}
+}
+
+// stmtHasJump reports whether the statement tree contains a return, goto, break,
+// or continue. The setjmp==0 emulation hosts the try body in a closure so the
+// catch can run at function level (see notSetJmp); a closure cannot host those
+// control transfers, so their presence selects the original defer-hosted form.
+func (c *ctx) stmtHasJump(n cc.Node) (yes bool) {
+	walkC(n, func(n cc.Node, mode int) {
+		if x, ok := n.(*cc.JumpStatement); ok {
+			switch x.Case {
+			case
+				cc.JumpStatementReturn,
+				cc.JumpStatementGoto,
+				cc.JumpStatementGotoExpr,
+				cc.JumpStatementBreak,
+				cc.JumpStatementContinue:
+
+				yes = true
+			}
+		}
+	})
+	return yes
 }
 
 func (c *ctx) isSetJmp(n cc.ExpressionNode) (arg cc.ExpressionNode) {
