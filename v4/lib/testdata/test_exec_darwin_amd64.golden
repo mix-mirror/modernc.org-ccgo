@@ -26,7 +26,11 @@ assets/benchmarksgame-team.pages.debian.net/fannkuchredux-2.c
 assets/benchmarksgame-team.pages.debian.net/fannkuchredux-3.c
 assets/benchmarksgame-team.pages.debian.net/fannkuchredux-5.c
 assets/benchmarksgame-team.pages.debian.net/fannkuchredux.c
+assets/benchmarksgame-team.pages.debian.net/fasta-2.c
 assets/benchmarksgame-team.pages.debian.net/fasta-3.c
+assets/benchmarksgame-team.pages.debian.net/fasta-5.c
+assets/benchmarksgame-team.pages.debian.net/fasta-6.c
+assets/benchmarksgame-team.pages.debian.net/fasta-7.c
 assets/benchmarksgame-team.pages.debian.net/fasta-8.c
 assets/benchmarksgame-team.pages.debian.net/fasta-9.c
 assets/benchmarksgame-team.pages.debian.net/fasta.c
@@ -43,6 +47,7 @@ assets/benchmarksgame-team.pages.debian.net/spectral-norm.c
 assets/ccgo/bug/arr.c
 assets/ccgo/bug/atomic.c
 assets/ccgo/bug/bitfield.c
+assets/ccgo/bug/bool.c
 assets/ccgo/bug/complit.c
 assets/ccgo/bug/condfn.c
 assets/ccgo/bug/conv.c
@@ -98,6 +103,7 @@ assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/20000403-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/20000403-2.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/20000405-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/20000405-2.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/20000405-3.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/20000412-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/20000412-2.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/20000420-1.c
@@ -404,6 +410,7 @@ assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/20070827-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/20070905-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/20070906-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/20070915-1.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/20070919-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/20071027-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/20071102-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/20071105-1.c
@@ -1216,6 +1223,7 @@ assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr40026.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr40035.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr40080.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr40204.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr40233.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr40252.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr40291.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr40321.c
@@ -1358,6 +1366,7 @@ assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr51069.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr51077.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr51246.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr51247.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr51354.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr51761.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr51856.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/pr52073.c
@@ -1630,6 +1639,7 @@ assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/strcpy-2.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/string-large-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/stru.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/struct-non-lval-1.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/struct-non-lval-3.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/structret.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/structs.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/stuct.c
@@ -1661,6 +1671,7 @@ assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/v.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/vector-3.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/vector-5.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/vector-6.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/vector-align-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/vla-const-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/vla-const-2.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/volatile-1.c
@@ -1801,6 +1812,8 @@ assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20010604-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20010711-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20010717-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20010723-1.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20010904-1.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20010904-2.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20010910-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20010915-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20010924-1.c
@@ -1901,6 +1914,7 @@ assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030224-2.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030307-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030313-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030316-1.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030323-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030401-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030403-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030404-1.c
@@ -1913,6 +1927,7 @@ assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030714-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030715-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030717-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030718-1.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030811-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030821-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030828-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030828-2.c
@@ -2094,6 +2109,7 @@ assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20170111-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20170401-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20170401-2.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20170419-1.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20171008-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20180112-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20180131-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20180226-1.c
@@ -2568,6 +2584,7 @@ assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr22429.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr22493-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr22630.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr23047.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr23467.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr23604.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr23941.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr24141.c
@@ -2643,6 +2660,7 @@ assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr36765.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr37102.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr37125.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr37573.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr37780.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr37882.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr37924.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr37931.c
@@ -2691,6 +2709,7 @@ assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr43236.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr43269.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr43438.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr43629.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr43783.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr43784.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr43835.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr43987.c
@@ -3240,6 +3259,8 @@ assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20010604-1.
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20010711-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20010717-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20010723-1.c
+assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20010904-1.c
+assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20010904-2.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20010910-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20010915-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20010924-1.c
@@ -3340,6 +3361,7 @@ assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20030224-2.
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20030307-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20030313-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20030316-1.c
+assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20030323-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20030401-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20030403-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20030404-1.c
@@ -3352,6 +3374,7 @@ assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20030714-1.
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20030715-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20030717-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20030718-1.c
+assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20030811-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20030821-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20030828-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20030828-2.c
@@ -3533,6 +3556,7 @@ assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20170111-1.
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20170401-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20170401-2.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20170419-1.c
+assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20171008-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20180112-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20180131-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/20180226-1.c
@@ -4016,6 +4040,7 @@ assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr22429.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr22493-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr22630.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr23047.c
+assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr23467.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr23604.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr23941.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr24141.c
@@ -4091,6 +4116,7 @@ assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr36765.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr37102.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr37125.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr37573.c
+assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr37780.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr37882.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr37924.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/pr37931.c
@@ -4520,6 +4546,7 @@ assets/github.com/vnmakarov/mir/c-benchmarks/heapsort.c
 assets/github.com/vnmakarov/mir/c-benchmarks/lists.c
 assets/github.com/vnmakarov/mir/c-benchmarks/mandelbrot.c
 assets/github.com/vnmakarov/mir/c-benchmarks/matrix.c
+assets/github.com/vnmakarov/mir/c-benchmarks/method-call.c
 assets/github.com/vnmakarov/mir/c-benchmarks/nbody.c
 assets/github.com/vnmakarov/mir/c-benchmarks/sieve.c
 assets/github.com/vnmakarov/mir/c-benchmarks/spectral-norm.c
@@ -4656,7 +4683,6 @@ assets/github.com/vnmakarov/mir/c-tests/lacc/duffs-device.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/enum.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/exit.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/expression-div-mod.c
-assets/github.com/vnmakarov/mir/c-tests/lacc/expression.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/fact.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/field-chain-assign.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/float-arithmetic.c
@@ -4816,9 +4842,11 @@ assets/github.com/vnmakarov/mir/c-tests/new/mike.c
 assets/github.com/vnmakarov/mir/c-tests/new/nested-macro-calls.c
 assets/github.com/vnmakarov/mir/c-tests/new/non-pedantic-macro-redef.c
 assets/github.com/vnmakarov/mir/c-tests/new/ptr-to-array.c
+assets/github.com/vnmakarov/mir/c-tests/new/setjmp.c
 assets/github.com/vnmakarov/mir/c-tests/new/test1.c
 assets/github.com/vnmakarov/mir/c-tests/new/typedef-member-scope.c
 assets/github.com/vnmakarov/mir/c-tests/new/typedef.c
+assets/github.com/vnmakarov/mir/c-tests/new/var-size-in-var-initializer.c
 assets/tcc-0.9.27/tests/tests2/00_assignment.c
 assets/tcc-0.9.27/tests/tests2/01_comment.c
 assets/tcc-0.9.27/tests/tests2/02_printf.c
@@ -4884,6 +4912,7 @@ assets/tcc-0.9.27/tests/tests2/77_push_pop_macro.c
 assets/tcc-0.9.27/tests/tests2/78_vla_label.c
 assets/tcc-0.9.27/tests/tests2/79_vla_continue.c
 assets/tcc-0.9.27/tests/tests2/80_flexarray.c
+assets/tcc-0.9.27/tests/tests2/81_types.c
 assets/tcc-0.9.27/tests/tests2/82_attribs_position.c
 assets/tcc-0.9.27/tests/tests2/83_utf8_in_identifiers.c
 assets/tcc-0.9.27/tests/tests2/84_hex-float.c
