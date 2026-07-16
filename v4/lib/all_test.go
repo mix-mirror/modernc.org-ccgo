@@ -641,7 +641,9 @@ func testExec1(t *testing.T, p *parallel, root, path string, execute bool, g *go
 			// makarov et al
 			cExecFailed = false
 		default:
-			if cExecFailed || isTestExecKnownFail(fullPath) {
+			// When no cbin was produced cbinRC is a sentinel, not an exit
+			// status, so there's nothing to verify gobinRC against.
+			if cCompilerFailed || cExecFailed || isTestExecKnownFail(fullPath) {
 				p.skip()
 				return nil
 			}
