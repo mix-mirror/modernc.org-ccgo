@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"runtime/debug"
 	"strings"
 
 	"modernc.org/cc/v4"
@@ -156,6 +157,7 @@ type Task struct {
 	strictISOMode                bool // -ansi or stc=c90
 	unsignedEnums                bool // -unsigned-enums
 	verifyTypes                  bool // -verify-types
+	version                      bool // --version
 	winapiNoErrno                bool // --winapi-no-errno
 	doom                         bool // --doom
 }
@@ -385,7 +387,7 @@ func (t *Task) main() (err error) {
 	set.Arg("march", true, func(arg, val string) error { return nil })
 	set.Arg("mtune", true, func(arg, val string) error { return nil })
 	set.Arg("rpath", true, func(arg, val string) error { return nil })
-	set.Opt("-version", func(arg string) error { return nil })
+	set.Opt("-version", func(arg string) error { t.version = true; return nil })
 	set.Opt("M", func(arg string) error { return nil })
 	set.Opt("MD", func(arg string) error { return nil })
 	set.Opt("MM", func(arg string) error { return nil })
@@ -462,6 +464,11 @@ func (t *Task) main() (err error) {
 		default:
 			return errorf("parsing %v: %v", t.args[1:], err)
 		}
+	}
+
+	if t.version {
+		fmt.Fprintf(t.stdout, "ccgo version %s\n", ccgoVersion())
+		return nil
 	}
 
 	if t.hotSwitch != "" {
@@ -691,6 +698,34 @@ func (t *Task) main() (err error) {
 	}
 	t.L = append(t.L, defaultLibs)
 	return t.link()
+}
+
+// ccgoVersion reports the module version of modernc.org/ccgo/v4, as recorded in
+// the running binary's build info. It returns the main module version when ccgo
+// is the main module (the ccgo command), the dependency version when ccgo is
+// imported (e.g. from a code generator), or "(devel)" for an unversioned build.
+func ccgoVersion() string {
+	const path = "modernc.org/ccgo/v4"
+	bi, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "(devel)"
+	}
+
+	if bi.Main.Path == path && bi.Main.Version != "" {
+		return bi.Main.Version
+	}
+
+	for _, dep := range bi.Deps {
+		if dep.Path == path && dep.Version != "" {
+			return dep.Version
+		}
+	}
+
+	if bi.Main.Version != "" {
+		return bi.Main.Version
+	}
+
+	return "(devel)"
 }
 
 func (t *Task) arExtract(fn string) (r []string, err error) {
