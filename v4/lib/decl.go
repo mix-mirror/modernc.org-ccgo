@@ -88,6 +88,7 @@ type fnCtx struct {
 	nextID                        int
 	t                             *cc.FunctionType
 	tlsAllocs                     int64
+	vaListOffs                    map[cc.ExpressionNode]int64
 	vlaSizes                      map[*cc.Declarator]string
 }
 

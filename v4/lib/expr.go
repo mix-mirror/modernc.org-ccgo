@@ -3983,12 +3983,27 @@ func (c *ctx) postfixExpressionCall(w writer, n *cc.PostfixExpression, mode mode
 		}
 
 		var vaOff int64
-		if c.pass == 1 && ft.IsVariadic() {
-			n := 8 * (len(args) - ft.MinArgs() + 2)
-			c.f.tlsAllocs = roundup(c.f.tlsAllocs, 8)
-			vaOff = c.f.tlsAllocs
-			vaOff = roundup(vaOff, 16)
-			c.f.tlsAllocs += int64(n)
+		if ft.IsVariadic() {
+			// The va_list packing buffer for an inlined variadic function must be
+			// reserved past all locals allocated so far and its offset recorded in
+			// pass 1, then reused in pass 2. Computing it only in pass 1 (leaving
+			// it 0 in pass 2) placed the buffer over the caller's address-taken
+			// locals, corrupting them (e.g. on windows, where the stdio family are
+			// static-inline wrappers around __mingw_v*). Mirror the fnResults
+			// pattern.
+			switch c.pass {
+			case 1:
+				nb := 8 * (len(args) - ft.MinArgs() + 2)
+				c.f.tlsAllocs = roundup(c.f.tlsAllocs, 16)
+				vaOff = c.f.tlsAllocs
+				if c.f.vaListOffs == nil {
+					c.f.vaListOffs = map[cc.ExpressionNode]int64{}
+				}
+				c.f.vaListOffs[n] = vaOff
+				c.f.tlsAllocs += int64(nb)
+			case 2:
+				vaOff = c.f.vaListOffs[n]
+			}
 		}
 
 		sv := c.f.inlineInfo
