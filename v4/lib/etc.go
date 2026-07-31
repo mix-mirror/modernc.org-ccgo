@@ -1084,10 +1084,12 @@ func gcKind(k cc.Kind, cabi *cc.ABI) gc.Kind {
 	case cc.Function:
 		return gc.Function
 	case
+		// Kinds having no Go counterpart, the caller must handle the -1 result.
 		cc.ComplexChar, cc.ComplexInt, cc.ComplexLong, cc.ComplexLongLong, cc.ComplexShort,
 		cc.ComplexUInt, cc.ComplexUShort, cc.Enum, cc.Int128, cc.UInt128, cc.Void,
 		cc.Float128, cc.Float32, cc.Float32x, cc.Float64, cc.Float64x, cc.Decimal128,
-		cc.Decimal32, cc.Decimal64, cc.Array, cc.Struct, cc.Union, cc.Float16:
+		cc.Decimal32, cc.Decimal64, cc.Array, cc.Struct, cc.Union, cc.Float16,
+		cc.BFloat16, cc.ComplexFloat16, cc.Float128x:
 
 		// ok
 	default:
