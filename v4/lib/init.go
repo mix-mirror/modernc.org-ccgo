@@ -388,8 +388,18 @@ func (c *ctx) initializerUnion(w writer, n cc.Node, a []*cc.Initializer, t *cc.U
 	case 0:
 		c.err(errorf("%v: cannot initialize empty union", n.Position()))
 	case 1:
-		b.w("%s{%s%s: %s}", c.typ(n, t), tag(field), c.fieldName(t, t.FieldByIndex(0)), c.initializer(w, n, a, t.FieldByIndex(0).Type(), off0, false))
-		return &b
+		// A single-field union is rendered as a Go struct with that one field, so
+		// the initializer can name it directly. Not for a bit field though: the Go
+		// field then covers the whole storage and the value must be masked and
+		// shifted into its bit position within the access unit, which is what the
+		// reinterpreted-struct form below does. Placing the value as-is happens to
+		// work on little-endian targets, where a union bit field starts at bit 0,
+		// but corrupts it on big-endian ones, where it starts at the most
+		// significant bit of the access unit.
+		if f := t.FieldByIndex(0); !f.IsBitfield() {
+			b.w("%s{%s%s: %s}", c.typ(n, t), tag(field), c.fieldName(t, f), c.initializer(w, n, a, f.Type(), off0, false))
+			return &b
+		}
 	}
 
 	if r := c.compactUnionInit(n, a, t, off0); r != nil {
@@ -576,13 +586,19 @@ func (c *ctx) initializerUnionOne(w writer, n cc.Node, a []*cc.Initializer, t *c
 	}
 	b.w("%sf ", tag(preserve))
 	f := in.Field()
+	// Size of the emitted f. A bit field is accessed through its access unit,
+	// which can be narrower than the declared type, so the padding below must
+	// account for the emitted width, not for in.Type().Size(), or the struct
+	// comes out shorter than the union it is reinterpreted as.
+	fsize := in.Type().Size()
 	switch {
 	case f != nil && f.IsBitfield():
-		b.w("%suint%d", tag(preserve), f.AccessBytes()*8)
+		fsize = f.AccessBytes()
+		b.w("%suint%d", tag(preserve), fsize*8)
 	default:
 		b.w("%s ", c.typ(n, in.Type()))
 	}
-	if post := t.Size() - (pre + in.Type().Size()); post != 0 {
+	if post := t.Size() - (pre + fsize); post != 0 {
 		b.w("; %s_ [%d]byte", tag(preserve), post)
 	}
 	b.w("}{%sf: ", tag(preserve))

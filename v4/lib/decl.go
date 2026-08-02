@@ -1353,7 +1353,11 @@ func (c *ctx) initDeclaratorInit(w writer, sep string, info *declInfo, d *cc.Dec
 		switch {
 		case info != nil && info.pinned():
 			switch {
-			case t.Kind() == cc.Union && initializer.Type().Size() == t.Size():
+			// Storing the active member over the whole union works only when the
+			// member occupies the storage as-is. A bit field does not: it lives at
+			// a bit offset within its access unit, which the general path below
+			// renders, so leave it alone here.
+			case t.Kind() == cc.Union && initializer.Type().Size() == t.Size() && !isBitfieldInitializer(c.unbracedInitilizer(initializer)):
 				w.w("%s%s*(*%s)(%s) = %[3]s{};", sep, c.posComment(d), c.typ(d, t), unsafePointer(bpOff(info.bpOff)))
 				u := c.unbracedInitilizer(initializer)
 				w.w("%s%s*(*%s)(%s) = %s;", sep, c.posComment(d), c.typ(d, u.Type()), unsafePointer(bpOff(info.bpOff)), c.initializerOuter(w, u, u.Type()))
@@ -1452,6 +1456,12 @@ func (c *ctx) initCode(w writer, ref func(int64) string, n *cc.Initializer, t cc
 		return &b
 	}
 	return nil
+}
+
+// isBitfieldInitializer reports whether n initializes a bit field.
+func isBitfieldInitializer(n *cc.Initializer) bool {
+	f := n.Field()
+	return f != nil && f.IsBitfield()
 }
 
 func (c *ctx) unbracedInitilizer(n *cc.Initializer) *cc.Initializer {
