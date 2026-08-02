@@ -1451,6 +1451,27 @@ func (c *ctx) initCode(w writer, ref func(int64) string, n *cc.Initializer, t cc
 		a := c.initalizerFlatten(n, nil)
 		for _, v := range a {
 			e := v.AssignmentExpression
+			// A bit field occupies a part of an access unit shared with the rest of
+			// its group, so it has to be merged in, not stored over: storing the
+			// declared type over the access unit both clobbers the neighbours and
+			// puts the value at bit 0 instead of at the field's bit offset, which is
+			// non-zero for all but the first field of a group on little-endian
+			// targets and for all but the last one on big-endian targets.
+			if f := v.Field(); f != nil && f.IsBitfield() {
+				if f.ValueBits() == 0 {
+					continue
+				}
+
+				ut := c.typ(e, c.unsignedInts[f.AccessBytes()])
+				p := ref(v.Offset())
+				b.w(
+					"*(*%s)(%s) = *(*%[1]s)(%[2]s)&^%#0x | ((%s)&%#0x)<<%d;",
+					ut, p, f.Mask(),
+					c.topExpr(w, e, c.unsignedInts[f.AccessBytes()], exprDefault), uint64(1)<<f.ValueBits()-1, f.OffsetBits(),
+				)
+				continue
+			}
+
 			b.w("*(*%s)(%s) = %s;", c.typ(e, v.Type()), ref(v.Offset()), c.topExpr(w, e, v.Type(), exprDefault))
 		}
 		return &b

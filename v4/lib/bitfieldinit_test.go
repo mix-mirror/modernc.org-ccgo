@@ -16,13 +16,17 @@ import (
 // TestBitfieldInitRegression verifies that initializing a bit field puts the
 // value at the field's bit offset within its access unit.
 //
-// A union whose only member is a bit field was rendered as a plain Go struct
-// literal storing the value as-is. That happens to work on little-endian
-// targets, where a bit field group starts at bit 0, but corrupts the value on
-// big-endian ones (linux/s390x), where a group is filled from the most
-// significant bit of the access unit down.
+// Two paths got this wrong. A union whose only member is a bit field was
+// rendered as a plain Go struct literal storing the value as-is, and a struct
+// containing a union member has its initializer emitted as a sequence of stores
+// (initCode), which stored the declared type over the whole access unit. Both
+// happen to work on little-endian targets, where a bit field group starts at bit
+// 0, but corrupt the value on big-endian ones (linux/s390x), where a group is
+// filled from the most significant bit of the access unit down. The initCode
+// path additionally clobbered the other bit fields sharing the access unit,
+// which is wrong everywhere.
 //
-// The case surfaced as a TestCSmith failure for
+// The union case surfaced as a TestCSmith failure for
 // '--bitfields ... -s 2273393378' on linux/s390x after modernc.org/cc/v4 v4.29.1
 // started allocating bit fields MSB-first on big-endian targets.
 func TestBitfieldInitRegression(t *testing.T) {
@@ -35,12 +39,22 @@ union U12s  { signed f0 : 12; };             /* signed, access unit narrower */
 union U9    { unsigned short f0 : 9; };
 union UMix  { unsigned f0 : 30; int f1; };   /* bit field is not the only member */
 
-static union U30   g30     = {6};
-static union U3in8 g3in8   = {5};
-static union U12s  g12s    = {-7};
-static union U9    g9      = {300};
-static union UMix  gmix    = {6};
-static union U30   garr[3] = {{1}, {2}, {3}};
+/* A struct with a union member takes the initCode() path. */
+struct WithUnion {
+	int a;
+	union { int u0; char u1[4]; } u;
+	unsigned b : 5;
+	signed c : 11;
+	union U30 d;
+};
+
+static union U30   g30      = {6};
+static union U3in8 g3in8    = {5};
+static union U12s  g12s     = {-7};
+static union U9    g9       = {300};
+static union UMix  gmix     = {6};
+static union U30   garr[3]  = {{1}, {2}, {3}};
+static struct WithUnion gwu = {1, {2}, 3, -4, {5}};
 
 int main() {
 	union U30   l30     = {6};
@@ -49,13 +63,17 @@ int main() {
 	union U9    l9      = {300};
 	union UMix  lmix    = {6};
 	union U30   larr[3] = {{1}, {2}, {3}};
+	struct WithUnion lwu = {1, {2}, 3, -4, {5}};
 
 	printf("g %u %llu %d %u %u %u %u %u\n", g30.f0, (unsigned long long)g3in8.f0,
 		g12s.f0, g9.f0, gmix.f0, garr[0].f0, garr[1].f0, garr[2].f0);
 	printf("l %u %llu %d %u %u %u %u %u\n", l30.f0, (unsigned long long)l3in8.f0,
 		l12s.f0, l9.f0, lmix.f0, larr[0].f0, larr[1].f0, larr[2].f0);
+	printf("gwu %d %d %u %d %u\n", gwu.a, gwu.u.u0, gwu.b, gwu.c, gwu.d.f0);
+	printf("lwu %d %d %u %d %u\n", lwu.a, lwu.u.u0, lwu.b, lwu.c, lwu.d.f0);
 	l30.f0 = 0x2ABCDEF;
-	printf("store %u\n", l30.f0);
+	gwu.b = 30;
+	printf("store %u %u %d\n", l30.f0, gwu.b, gwu.c);
 	return 0;
 }
 `)
