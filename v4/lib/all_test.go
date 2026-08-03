@@ -7,7 +7,6 @@ package ccgo // import "modernc.org/ccgo/v4/lib"
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"encoding/hex"
 	"flag"
 	"fmt"
@@ -35,12 +34,6 @@ import (
 	"modernc.org/gc/v2"
 	_ "modernc.org/libc"
 	"modernc.org/mathutil"
-)
-
-const (
-	csmithBitfields   = "--bitfields"    // --bitfields | --no-bitfields: enable | disable full-bitfields structs (enabled by default). // Was disabled by default in older versions,
-	csmithNoBitfields = "--no-bitfields" // --bitfields | --no-bitfields: enable | disable full-bitfields structs (enabled by default).
-
 )
 
 var (
@@ -82,6 +75,7 @@ var (
 		"--no-volatile-pointers", // --volatile-pointers | --no-volatile-pointers: enable | disable volatile pointers (enabled by default).
 		"--no-volatiles",         // --volatiles | --no-volatiles: enable | disable volatiles (enabled by default).
 		"--paranoid",             // --paranoid | --no-paranoid: enable | disable pointer-related assertions (disabled by default).
+		"--bitfields",            // --bitfields | --no-bitfields: enable | disable full-bitfields structs (enabled by default, was disabled in older csmith versions).
 	}, " ")
 )
 
@@ -817,11 +811,6 @@ func TestCSmith(t *testing.T) {
 		t.Skip()
 	}
 
-	abi, err := cc.NewABI(runtime.GOOS, runtime.GOARCH)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	if testing.Short() {
 		t.Skip("skipped: -short")
 	}
@@ -831,7 +820,6 @@ func TestCSmith(t *testing.T) {
 		t.Skip(err)
 	}
 
-	bigEndian := abi.ByteOrder == binary.BigEndian
 	binaryName := filepath.FromSlash("./a.out")
 	goBinaryName := filepath.FromSlash("./main")
 	if runtime.GOOS == "windows" {
@@ -889,14 +877,6 @@ func TestCSmith(t *testing.T) {
 		}
 	}
 
-	//TODO report the problem at http://www.flux.utah.edu/mailman/listinfo/csmith-bugs
-	bigEndianBlacklist := []string{
-		"-s 2949258094",
-		"-s 3329111231",
-		"-s 4101947480",
-	}
-
-	// Other blacklist
 	blacklist := []struct{ target, seed string }{
 		{"linux/ppc64le", "8032246412188002"}, // false positive: gcc 10.2.1 bug.
 		{"linux/ppc64le", "3088696074888013"}, // TODO https://gitlab.com/cznic/builder/-/tree/91efcffac0cf3a1618f47d117864b76435ed87a2/logs/modernc.org/ccgo/v4/lib
@@ -1000,13 +980,6 @@ out:
 				continue
 			}
 
-			if bigEndian {
-				for _, v := range bigEndianBlacklist {
-					if strings.Contains(s, v) {
-						continue out
-					}
-				}
-			}
 			for _, v := range blacklist {
 				if v.target == target && strings.Contains(s, v.seed) {
 					continue out
@@ -1028,12 +1001,6 @@ out:
 			}
 
 			args += csmithDefaultArgs
-			switch {
-			case bigEndian:
-				args += " " + csmithNoBitfields
-			default:
-				args += " " + csmithBitfields
-			}
 		}
 		csOut, err := exec.Command(csmith, strings.Split(args, " ")...).Output()
 		if err != nil {
