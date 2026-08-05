@@ -285,24 +285,29 @@ func (c *ctx) typ0(b *strings.Builder, n cc.Node, t cc.Type, useTypenames, useTa
 		default:
 			fmt.Fprintf(b, "struct {")
 			nf := x.NumFields()
+			ff := firstPositiveSizedField(x)
+			// Of all the members only ff and the zero-sized stand-ins of the other
+			// non bit fields are emitted below, so only those determine the
+			// alignment of the resulting Go struct.
 			var al int
 			for i := 0; i < nf; i++ {
 				f := x.FieldByIndex(i)
-				if f.IsFlexibleArrayMember() {
+				if f.IsFlexibleArrayMember() || f.Type().Size() == 0 {
 					continue
 				}
 
 				switch {
 				case f.IsBitfield():
-					al = mathutil.Max(al, mathutil.Min(f.GroupSize(), c.maxAlign))
+					if f == ff {
+						al = mathutil.Max(al, mathutil.Min(int(f.AccessBytes()), c.maxAlign))
+					}
 				default:
-					al = mathutil.Max(al, c.goFieldAlign(x.FieldByIndex(i).Type()))
+					al = mathutil.Max(al, c.goFieldAlign(f.Type()))
 				}
 			}
 			if al < x.Align() {
 				c.alignPseudoField(b, mathutil.Min(x.Align(), c.maxAlign))
 			}
-			ff := firstPositiveSizedField(x)
 			for i := 0; i < x.NumFields(); i++ {
 				f := x.FieldByIndex(i)
 				if f == ff || f.Type().Size() == 0 || f.IsBitfield() {
@@ -324,7 +329,21 @@ func (c *ctx) typ0(b *strings.Builder, n cc.Node, t cc.Type, useTypenames, useTa
 			b.WriteByte('\n')
 			fmt.Fprintf(b, "%s%s", tag(field), c.fieldName(x, ff))
 			b.WriteByte(' ')
-			c.typ0(b, n, ff.Type(), true, true, true)
+			switch {
+			case ff.IsBitfield():
+				// The Go field of a bit field is only the storage of its access unit,
+				// which the loads and stores of the field address explicitly. The
+				// access unit can be narrower than the declared type and on some
+				// targets even narrower than the union, eg. sizeof(union { unsigned
+				// long long f0:3; }) is 4 on linux/386, where rendering the declared
+				// type produces a field wider than the union and a negative padding.
+				// GroupSize is not usable here, for a union member it is the size of
+				// the largest member, not a power of two in general.
+				sz1 = ff.AccessBytes()
+				fmt.Fprintf(b, "uint%d", 8*sz1)
+			default:
+				c.typ0(b, n, ff.Type(), true, true, true)
+			}
 			if n := t.Size() - sz1; n != 0 {
 				fmt.Fprintf(b, "\n%s__ccgo_pad%d [%d]byte", tag(field), nf, t.Size()-sz1)
 			}
