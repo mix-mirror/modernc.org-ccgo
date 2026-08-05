@@ -155,8 +155,73 @@ int main() {
 	if bytes.Contains(goOut, []byte("\r\n")) {
 		goOut = bytes.ReplaceAll(goOut, []byte("\r"), nil)
 	}
+	// SHOW() reports constant expressions, folded by the front end, so the U*
+	// lines compare the ABI of modernc.org/cc/v4, which follows GCC, with the ABI
+	// of hostCC. Clang targeting *-windows-gnu drops the alignment a bit field
+	// contributes, but only in a union: it reports _Alignof(union { unsigned long
+	// long f0 : 3; }) == 1 while reporting 8 for the same member in a struct, and
+	// 8 for both on ELF and Mach-O targets. The win64 builder, where cc is clang,
+	// then reports the whole U* block as a mismatch, while with CC=gcc on the same
+	// machine the block matches exactly. That is a host compiler disagreeing with
+	// itself and with GCC about the target ABI, not something a Go rendering could
+	// match, so compare only the value lines there. The Go rendering agreeing with
+	// the front end, which is what this test is about, is still checked by the
+	// -verify-types assertions the transpiled code runs in an init().
+	if !hostAlignsUnionToBitfields(t, dir) {
+		t.Logf("%s does not align a union to its bit field members, comparing only the value lines\nC:  %s\nGo: %s", hostCC, cOut, goOut)
+		cOut = dropLayoutLines(cOut)
+		goOut = dropLayoutLines(goOut)
+	}
 	if !bytes.Equal(cOut, goOut) {
 		t.Fatalf("output mismatch\nC:  %s\nGo: %s", cOut, goOut)
 	}
 	t.Logf("output: %s", cOut)
+}
+
+// hostAlignsUnionToBitfields reports whether hostCC lets a bit field contribute
+// the alignment of its declared type to the alignment of the enclosing union,
+// like GCC and modernc.org/cc/v4 do.
+func hostAlignsUnionToBitfields(t *testing.T, dir string) bool {
+	src := filepath.Join(dir, "probe.c")
+	if err := os.WriteFile(src, []byte(`
+#include <stdio.h>
+
+union P { unsigned long long f0 : 3; };
+
+int main() {
+	printf("%d %d\n", (int)_Alignof(union P), (int)_Alignof(unsigned long long));
+	return 0;
+}
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	bin := filepath.Join(dir, enforceBinaryExt("probe"))
+	if out, err := exec.Command(hostCC, "-o", bin, "-w", src).CombinedOutput(); err != nil {
+		t.Fatalf("hostCC cannot build the alignment probe: %v\n%s", err, out)
+	}
+
+	out, err := exec.Command(bin).Output()
+	if err != nil {
+		t.Fatalf("alignment probe failed: %v", err)
+	}
+
+	a := bytes.Fields(out)
+	if len(a) != 2 {
+		t.Fatalf("unexpected alignment probe output: %q", out)
+	}
+
+	return bytes.Equal(a[0], a[1])
+}
+
+// dropLayoutLines removes the lines SHOW() produces, ie. the ones reporting
+// sizes, alignments and offsets, from out.
+func dropLayoutLines(out []byte) []byte {
+	var a [][]byte
+	for _, line := range bytes.Split(out, []byte("\n")) {
+		if !bytes.HasPrefix(line, []byte("U")) {
+			a = append(a, line)
+		}
+	}
+	return bytes.Join(a, []byte("\n"))
 }
