@@ -1,9 +1,9 @@
 # Handoff: the `setjmp` lowering swallows every panic (silent `exit(0)` on a fault)
 
-Status: **OPEN**. Reported against ccgo `v4.34.7-0.20260805164225-484bae2893ff`.
-Filed by the `modernc.org/xetex` side; **no ccgo change has been made** — this is
-a request for independent scrutiny, because the fix touches codegen that every
-ccgo consumer inherits.
+Status: **FIXED** in the ccgo working tree, uncommitted. See "Resolution" at the
+end for what was changed, what was verified, and answers to the five open
+questions. Reported against ccgo `v4.34.7-0.20260805164225-484bae2893ff`.
+Filed by the `modernc.org/xetex` side.
 
 ## TL;DR
 
@@ -217,3 +217,109 @@ The xetex-side write-up, including how the trap was eventually cornered, is in
 `modernc.org/xetex/HANDOFF.md` under "Blocker A". The related wa2go fix that
 unblocked xetex (`-DWASM_RT_MAX_CALL_STACK_DEPTH=100000`) is `wa2go 1bdb337`; it
 is independent of anything here.
+
+## Resolution
+
+The report is accurate and the defect is confirmed at all six emission sites, not
+only the one the reporter's program reached. A reproducer driving each site
+through three outcomes (normal completion, real `longjmp`, nil store) shows `gcc`
+dying with SIGSEGV at every site while pre-fix ccgo continues and exits 0. The
+two closure forms are worse than described: the enclosing function returns its
+*correct* value, so the fault leaves no trace at all.
+
+### What changed
+
+`stmt.go` only, 6 emission sites now routed through two new helpers,
+`setJmpRecover` and `setJmpRecoverDefault`, so the shape cannot drift apart
+again. The four doc comments were updated to the shape actually emitted.
+
+The proposed patch could not be used verbatim. `switch x := recover().(type)` is
+not expressible here: the object file keeps identifiers tagged, so `type` is at
+that point still the ordinary identifier `pptype` and only the tag substitution
+done when linking turns it into the keyword. That leaves the guard form an
+assignment where an expression is required — it does not parse, and ccgo fails
+the object file at its `gofmt` step before linking ever runs. Binding the value
+before the switch is valid Go both before and after the substitution:
+
+```go
+x := recover()
+switch x.(type) {
+case libc.LongjmpRetval:
+	stmt1
+default:
+	tls.PopJumpBuffer(jb)
+	if x != nil {
+		panic(x)
+	}
+}
+```
+
+The behaviour is the one proposed. Non-longjmp panics propagate; the nil-store
+reproducer now exits 2 with `panic: runtime error: invalid memory address or nil
+pointer dereference [recovered, repanicked]` at every site, and the normal and
+`longjmp` paths are unchanged.
+
+### A sharper motivating case than the nil store
+
+libc's own fallbacks `Xsetjmp` and `Xlongjmp` are `panic(todo(""))`. Any `setjmp`
+in a shape the lowering does not recognise — `int rc = setjmp(jb);` is enough —
+compiles to `libc.Xsetjmp`. Nested inside a recognised region, that panic used to
+vanish: the program skipped the code and exited 0. It now reports
+`panic: libc_musl.go:1055:Xsetjmp TODO [recovered, repanicked]`. So the clause was
+not only swallowing user faults, it was swallowing ccgo's and libc's own
+not-implemented diagnostics.
+
+### The five open questions
+
+1. **The corpus.** `make shorttest` passes, 884s on linux/amd64
+   (`TestExec` + `TestSQLite`; `TestCSmith` is `-short`-skipped). The golden
+   drifts by 4 lines, all of it host-cc noise unrelated to this change: three
+   `mir/c-tests/lacc` entries the local gcc now rejects outright (implicit int,
+   implicit function declaration) and one `gcc.c-torture` entry it now accepts.
+   None of the four mentions `setjmp`. That drift was reverted, not committed.
+   `assets/github.com/vnmakarov/mir/c-tests/new/setjmp.c` stays in the golden, so
+   the setjmp corpus coverage is unchanged. No known-failure entry moved.
+2. **Whether `default:` should also pop.** Yes, keep the pop, and for a stronger
+   reason than "it matches the frame leaving": `PopJumpBuffer` panics unless the
+   buffer it is given is on top of the stack, so leaving a stale entry behind
+   would break the *enclosing* setjmp regions the panic unwinds into. Nothing can
+   rely on the buffer surviving, because a Go panic that escapes the region can
+   never be resumed back into it.
+3. **The `stmtHasJump` fallback forms.** Covered — the reproducer reaches all six
+   sites and the generated Go was checked to confirm each took the intended path.
+   Both fallback forms behaved exactly like the closure forms, before and after.
+4. **Cross-target.** `make build_all_targets` passes, all 21 GOOS/GOARCH pairs.
+   Nothing in the change is target-dependent.
+5. **Re-panic versus something narrower.** Re-panic is right. Converting to a
+   C-visible abort would match the native segfault's exit status but destroy the
+   diagnostic, which is the entire point; it would also be actively wrong for the
+   `panic(todo(...))` diagnostics above, which are not faults. Re-panic preserves
+   the original value and stack, and it restores the option of a consumer
+   recovering the fault deliberately — impossible today.
+
+### Two adjacent defects found while verifying — neither is this bug
+
+Both pre-date the change and were confirmed against a pre-fix build. Neither was
+folded into it.
+
+- **Nested `setjmp` regions are broken, independently of the recover issue.** Both
+  regions get the same jump-buffer autovar (`var v1 uintptr` — the pool in
+  `fnCtx.newAutovarTyp` recycles per statement via `rewindAutovars`, but a jump
+  buffer's live range spans the whole guarded region). The outer `PopJumpBuffer`
+  is therefore handed the *inner* buffer's address and panics `unsupported
+  setjmp/longjmp usage`. This fires even on the path where nothing jumps at all.
+  Sequential, non-nested regions are fine — verified byte-identical to gcc —
+  because their live ranges do not overlap. Consequence for this handoff: the
+  "quieter benefit" about nesting hygiene does not materialise, since nesting has
+  an earlier and unrelated bug. Worth its own fix.
+- **The defer-hosted-catch forms lose the enclosing function's return value on a
+  real `longjmp`**: gcc returns 11/22/45/67 for the four such sites, ccgo returns
+  0, because the code following the `if` never runs. Already acknowledged in the
+  code comments ("does not propagate a value-producing catch into the code
+  following the if"). The two closure forms get this right.
+
+### Not done
+
+No regression test was added to the repo. The corpus is the external
+`modernc.org/ccorpus2` module and `testdata/overlay/` holds only `.arg` files, so
+a C regression case for this belongs upstream in ccorpus2 rather than here.

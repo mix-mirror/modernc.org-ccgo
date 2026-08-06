@@ -478,6 +478,47 @@ func (c *ctx) selectionStatement(w writer, n *cc.SelectionStatement) {
 	}
 }
 
+// setJmpRecover emits the head of the type switch on the recovered value used by
+// the setjmp lowerings. The value is bound to a name because the default clause
+// must be able to re-raise it, see setJmpRecoverDefault.
+//
+// The binding cannot be written as the type switch guard, "switch x :=
+// recover().(type)". The object file keeps identifiers tagged, so "type" is at
+// this point still the ordinary identifier pptype and only the tag substitution
+// done when linking turns it into the keyword. That leaves the guard form an
+// assignment where an expression is required, which does not parse, while the
+// two statement form below is valid Go both before and after the substitution.
+func (c *ctx) setJmpRecover(w writer) {
+	pp := tag(preserve)
+	w.w("\n%sx := %srecover();", pp, pp)
+	w.w("\nswitch %sx.(%stype) {", pp, pp)
+}
+
+// setJmpRecoverDefault emits the default clause of that type switch, reached both
+// when the guarded region completed normally, when the goroutine is unwinding via
+// runtime.Goexit (recover reports nil in both cases) and when a panic other than
+// a longjmp arrived here.
+//
+// recover stops the panicking sequence for every panic value, the type switch
+// only selects a branch, so without re-raising a non-longjmp value here any Go
+// panic from the guarded region would be swallowed and the enclosing function
+// would return its zero values. In libc only TLS.Longjmp panics as a control
+// transfer, and it pops the jump buffer before doing so, which is why the
+// LongjmpRetval case does not pop; every other libc panic is a diagnostic that
+// must stay visible.
+//
+// The buffer is popped before re-raising because this frame is leaving either
+// way: that keeps the top of stack invariant PopJumpBuffer asserts valid for the
+// enclosing setjmp regions the panic unwinds into.
+func (c *ctx) setJmpRecoverDefault(w writer, v string) {
+	pp := tag(preserve)
+	w.w("\n%sdefault:", pp)
+	w.w("\n%stls.%sPopJumpBuffer(%s)", pp, pp, v)
+	w.w("\nif %sx != %snil {", pp, pp)
+	w.w("\n%spanic(%sx)", pp, pp)
+	w.w("\n}")
+}
+
 // C: if (setjmp(jb) != 0) stmt1; else stmt2;
 //
 //	if (setjmp(jb)) stmt1; else stmt2;
@@ -487,11 +528,15 @@ func (c *ctx) selectionStatement(w writer, n *cc.SelectionStatement) {
 //	tls.PushJumpBuffer(jb)
 //
 //	defer func() {
-//		switch x := recover().(type) {
+//		x := recover()
+//		switch x.(type) {
 //		case libc.LongjmpRetval:
 //			stmt1
 //		default:
 //			tls.PopJumpBuffer(jb)
+//			if x != nil {
+//				panic(x)
+//			}
 //		}
 //	}()
 //
@@ -537,11 +582,10 @@ func (c *ctx) setJmpNeq0(w writer, n *cc.SelectionStatement) (r bool) {
 		defer func() { c.f.inDefer-- }()
 
 		w.w("\ndefer func() {")
-		w.w("\nswitch %srecover().(%[1]stype) {", tag(preserve))
+		c.setJmpRecover(w)
 		w.w("\ncase %s%sLongjmpRetval:", c.task.tlsQualifier, tag(preserve))
 		c.statement(w, n.Statement)
-		w.w("%sdefault:", tag(preserve))
-		w.w("\n%stls.%[1]sPopJumpBuffer(%s)", tag(preserve), v)
+		c.setJmpRecoverDefault(w, v)
 		w.w("\n}")
 		w.w("\n}();")
 	}()
@@ -563,11 +607,15 @@ func (c *ctx) setJmpNeq0(w writer, n *cc.SelectionStatement) (r bool) {
 //	tls.PushJumpBuffer(jb)
 //
 //	defer func() {
-//		switch x := recover().(type) {
+//		x := recover()
+//		switch x.(type) {
 //		case libc.LongjmpRetval:
 //			stmt1
 //		default:
 //			tls.PopJumpBuffer(jb)
+//			if x != nil {
+//				panic(x)
+//			}
 //		}
 //	}()
 //
@@ -613,11 +661,10 @@ func (c *ctx) setJmpEqM1(w writer, n *cc.SelectionStatement) (r bool) {
 		defer func() { c.f.inDefer-- }()
 
 		w.w("\ndefer func() {")
-		w.w("\nswitch %srecover().(%[1]stype) {", tag(preserve))
+		c.setJmpRecover(w)
 		w.w("\ncase %s%sLongjmpRetval:", c.task.tlsQualifier, tag(preserve))
 		c.statement(w, n.Statement)
-		w.w("%sdefault:", tag(preserve))
-		w.w("\n%stls.%[1]sPopJumpBuffer(%s)", tag(preserve), v)
+		c.setJmpRecoverDefault(w, v)
 		w.w("\n}")
 		w.w("\n}();")
 	}()
@@ -638,11 +685,15 @@ func (c *ctx) setJmpEqM1(w writer, n *cc.SelectionStatement) (r bool) {
 //		tls.PushJumpBuffer(jb)
 //
 //		defer func() {
-//			switch x := recover().(type) {
+//			x := recover()
+//			switch x.(type) {
 //			case libc.LongjmpRetval:
 //				stmt2
 //			default:
 //				tls.PopJumpBuffer(jb)
+//				if x != nil {
+//					panic(x)
+//				}
 //			}
 //		}()
 //
@@ -684,15 +735,14 @@ func (c *ctx) notSetJmp(w writer, n *cc.SelectionStatement) (r bool) {
 			c.f.inDefer++
 			defer func() { c.f.inDefer-- }()
 			w.w("\ndefer func() {")
-			w.w("\nswitch %srecover().(%stype) {", pp, pp)
+			c.setJmpRecover(w)
 			w.w("\ncase %s%sLongjmpRetval:", c.task.tlsQualifier, pp)
 			if n.Statement2 != nil {
 				w.w("\n{")
 				c.statement(w, n.Statement2)
 				w.w("\n};")
 			}
-			w.w("\n%sdefault:", pp)
-			w.w("\n%stls.%sPopJumpBuffer(%s)", pp, pp, v)
+			c.setJmpRecoverDefault(w, v)
 			w.w("\n}")
 			w.w("\n}();")
 		}()
@@ -709,11 +759,10 @@ func (c *ctx) notSetJmp(w writer, n *cc.SelectionStatement) (r bool) {
 	// longjmp Longjmp has already popped it.
 	w.w("\nif (func() (%scaught %sbool) {", pp, pp)
 	w.w("\ndefer func() {")
-	w.w("\nswitch %srecover().(%stype) {", pp, pp)
+	c.setJmpRecover(w)
 	w.w("\ncase %s%sLongjmpRetval:", c.task.tlsQualifier, pp)
 	w.w("\n%scaught = %strue", pp, pp)
-	w.w("\n%sdefault:", pp)
-	w.w("\n%stls.%sPopJumpBuffer(%s)", pp, pp, v)
+	c.setJmpRecoverDefault(w, v)
 	w.w("\n}")
 	w.w("\n}();")
 	c.statement(w, n.Statement)
@@ -734,11 +783,15 @@ func (c *ctx) notSetJmp(w writer, n *cc.SelectionStatement) (r bool) {
 //		tls.PushJumpBuffer(jb)
 //
 //		defer func() {
-//			switch x := recover().(type) {
+//			x := recover()
+//			switch x.(type) {
 //			case libc.LongjmpRetval:
 //				stmt2
 //			default:
 //				tls.PopJumpBuffer(jb)
+//				if x != nil {
+//					panic(x)
+//				}
 //			}
 //		}()
 //
@@ -780,15 +833,14 @@ func (c *ctx) setJmpEq0(w writer, n *cc.SelectionStatement) (r bool) {
 			c.f.inDefer++
 			defer func() { c.f.inDefer-- }()
 			w.w("\ndefer func() {")
-			w.w("\nswitch %srecover().(%stype) {", pp, pp)
+			c.setJmpRecover(w)
 			w.w("\ncase %s%sLongjmpRetval:", c.task.tlsQualifier, pp)
 			if n.Statement2 != nil {
 				w.w("\n{")
 				c.statement(w, n.Statement2)
 				w.w("\n};")
 			}
-			w.w("\n%sdefault:", pp)
-			w.w("\n%stls.%sPopJumpBuffer(%s)", pp, pp, v)
+			c.setJmpRecoverDefault(w, v)
 			w.w("\n}")
 			w.w("\n}();")
 		}()
@@ -805,11 +857,10 @@ func (c *ctx) setJmpEq0(w writer, n *cc.SelectionStatement) (r bool) {
 	// longjmp Longjmp has already popped it.
 	w.w("\nif (func() (%scaught %sbool) {", pp, pp)
 	w.w("\ndefer func() {")
-	w.w("\nswitch %srecover().(%stype) {", pp, pp)
+	c.setJmpRecover(w)
 	w.w("\ncase %s%sLongjmpRetval:", c.task.tlsQualifier, pp)
 	w.w("\n%scaught = %strue", pp, pp)
-	w.w("\n%sdefault:", pp)
-	w.w("\n%stls.%sPopJumpBuffer(%s)", pp, pp, v)
+	c.setJmpRecoverDefault(w, v)
 	w.w("\n}")
 	w.w("\n}();")
 	c.statement(w, n.Statement)
