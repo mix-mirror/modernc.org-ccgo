@@ -8,7 +8,6 @@ var testExecKnownFails = map[string]struct{}{
 	// ==== EXEC FAIL - compiles and builds but fails when executed.
 
 	// Won't fix: setjmp/longjmp
-	`assets/github.com/vnmakarov/mir/c-benchmarks/except.c`: {},
 	`assets/github.com/vnmakarov/mir/c-tests/new/setjmp2.c`: {},
 
 	// Won't fix: sigfpe

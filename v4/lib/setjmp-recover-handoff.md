@@ -363,42 +363,58 @@ for a longjmp arriving once the closure can no longer see it. Since `Longjmp` po
 on its way out, the buffer is pushed again before the catch runs at the level of
 the if: in C it stays armed.
 
-The buffer is left armed only where the function contains a single `setjmp`, and
-where the catch defines no label, since the catch is emitted twice there. That
-restriction is not cosmetic. C keeps every buffer of a live frame valid, libc keeps
-armed buffers on a stack and `Longjmp` requires its target on top, and the two
-agree only while at most one buffer per function is armed. Arm a second and a
-`longjmp` to the first — which C allows, and which the nested reproducer below
-does — finds the second on top and panics. Without the restriction the fix traded
-one divergence for another; with it no case that worked before regresses, and
-generated code for functions with more than one `setjmp` is byte identical to
-before.
+Leaving the buffer armed was at first restricted to functions containing a single
+`setjmp`, because C keeps every buffer of a live frame valid while libc kept armed
+buffers on a stack whose top `Longjmp` required as its target, and the two agree
+only while at most one buffer per function is armed. That restriction is gone, see
+D. What remains of it is a region inside a loop, where the push and the function
+level defer would happen per iteration — worth 100MB per million iterations in a
+measurement — and a catch defining a label, which cannot be emitted twice.
 
-Lifting the restriction needs libc, not ccgo: `LongjmpRetval` carries only the
-value, so a recovering defer cannot tell whether a longjmp was meant for its own
-buffer and has to rely on the stack discipline to guarantee it. Give libc a way to
-answer that — a target in the panic value, or an accessor telling a defer whether
-its buffer is still armed — and the arming could be unconditional.
+**D. `longjmp` past an intervening active region was unsupported. FIXED**, in libc
+and ccgo together, which also removed the restriction above.
 
-**D. `longjmp` past an intervening active region is unsupported**, in libc rather
-than in ccgo: `TLS.Longjmp` calls `PopJumpBuffer` on its target, which panics
-unless the target is on top of the stack. Jumping from an inner region straight
-to an outer one therefore panics `unsupported setjmp/longjmp usage` where gcc runs
-the outer catch. Pre-existing, unaffected by any change here, and loud. It is the
-same stack-versus-set mismatch that bounds the fix for C.
+The mismatch was that C treats armed jump buffers as a set, any of which a longjmp
+may target, while libc treated them as a stack whose top `TLS.Longjmp` required.
+Jumping from an inner region straight to an outer one panicked `unsupported
+setjmp/longjmp usage` where gcc runs the outer catch.
+
+libc now lets `Longjmp` disarm its target wherever it sits, and `LongjmpRetval`
+carries that target rather than only the value setjmp must appear to return. The
+generated code needs the target because a panic unwinds through every region
+between the longjmp and its destination: each compares the buffer named in the
+value with the one it armed, and unless they are equal disarms its own and
+re-panics, leaving the value for the region it was meant for. Of two regions
+sharing a buffer the innermost is disarmed, which is the one C resumes at.
+
+The corpus shows it: `assets/github.com/vnmakarov/mir/c-benchmarks/except.c`, a
+nested exception benchmark that longjmps to whichever of two buffers matches the
+exception, was listed in `known_failures_linux_amd64_test.go` under "Won't fix:
+setjmp/longjmp". It passes now and has moved into the golden, its known-failure
+entry dropped. The other 22 platform tables still list it; the fix is not target
+dependent, but only linux/amd64 was verified here.
+
+Both sides are required. New generated code against an old libc does not build,
+`LongjmpRetval` having become a struct. Old generated code against a new libc
+builds but is degraded: it does not compare, so a longjmp aimed past it is
+recovered rather than passed on. `objectFileSemver` moves to `v2` so that object
+files predating the check cannot be linked into a program that relies on it, and
+libc's own package documentation already states the rule for the source level —
+recompile with a matching ccgo rather than upgrading libc alone.
 
 ### Divergences from the C reference that remain
 
 Measured by building each reproducer with gcc and with ccgo and comparing output
 and exit status. Everything not listed matches gcc exactly, including nested and
-sequential regions, nesting across a call, and the value-producing catch.
+sequential regions, nesting across a call, the value-producing catch, a longjmp
+aimed past an active inner region, and a longjmp from the tail of a function
+holding two regions.
 
 | case | gcc | ccgo |
 |---|---|---|
 | fault inside a guarded region | dies on SIGSEGV, exit 139 | panics, exit 2 — the point of the fix, loud either way |
 | longjmp caught by a defer hosted catch that falls through past the `if` | runs the code after the `if` | returns from the function, defect B |
-| longjmp past an intervening active region | runs the outer catch | panics `unsupported setjmp/longjmp usage`, defect D |
-| `setjmp` in a shape the lowering does not match | works | panics `Xsetjmp TODO`, libc has no real `setjmp` |
+| `setjmp` in a shape the lowering does not match | works | panics `Xsetjmp TODO`, and no Go implementation of `setjmp` is possible |
 
 ### Not done
 

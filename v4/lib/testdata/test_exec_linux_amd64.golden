@@ -4564,6 +4564,7 @@ assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/zerolen-1.c
 assets/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/zerolen-2.c
 assets/github.com/vnmakarov/mir/c-benchmarks/array.c
 assets/github.com/vnmakarov/mir/c-benchmarks/binary-trees.c
+assets/github.com/vnmakarov/mir/c-benchmarks/except.c
 assets/github.com/vnmakarov/mir/c-benchmarks/funnkuch-reduce.c
 assets/github.com/vnmakarov/mir/c-benchmarks/hash.c
 assets/github.com/vnmakarov/mir/c-benchmarks/hash2.c

@@ -36,10 +36,14 @@ const (
 	generatedFilePrefix = "Code generated for "
 	generatedFileSuffix = ", DO NOT EDIT."
 	jsonMetaRawName     = "__ccgo_meta_json"
-	//  package __ccgo_object_file_v1
+	//  package __ccgo_object_file_v2
 	objectFilePackageName       = objectFilePackageNamePrefix + objectFileSemver
 	objectFilePackageNamePrefix = "__ccgo_object_file_"
-	objectFileSemver            = "v1"
+	// v2: the setjmp lowering compares the buffer libc.LongjmpRetval names with the
+	// one its region armed. A v1 object file does not, and linked against a libc new
+	// enough to let a longjmp reach it would recover one meant for an outer setjmp
+	// instead of leaving it alone.
+	objectFileSemver = "v2"
 )
 
 const (

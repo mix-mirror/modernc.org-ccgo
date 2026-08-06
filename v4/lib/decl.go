@@ -88,8 +88,7 @@ type fnCtx struct {
 	locals                        map[*cc.Declarator]string // storage: static or automatic, linkage: none -> C renamed
 	maxVaListSize                 int64
 	nextID                        int
-	setJmpInLoop                  bool // any of them inside an iteration statement
-	setJmps                       int  // calls to setjmp in the body, see setJmpTryCatch
+	setJmpInLoop                  bool // a setjmp in the body sits inside an iteration statement
 	t                             *cc.FunctionType
 	tlsAllocs                     int64
 	vaListOffs                    map[cc.ExpressionNode]int64
@@ -138,15 +137,13 @@ next:
 	var fc *flowCtx
 	inIterationStatement := 0
 	hasSwitchInIterationStatement := false
-	setJmps := 0
 	setJmpInLoop := false
 	walkC(n, func(n cc.Node, mode int) {
 		switch x := n.(type) {
 		case *cc.PostfixExpression:
 			if mode == walkPre && x.Case == cc.PostfixExpressionCall {
-				if fn, _ := c.isCall(x); fn != nil && c.isIdentifier(fn) == "setjmp" {
-					setJmps++
-					if inIterationStatement > 0 {
+				if inIterationStatement > 0 {
+					if fn, _ := c.isCall(x); fn != nil && c.isIdentifier(fn) == "setjmp" {
 						setJmpInLoop = true
 					}
 				}
@@ -213,7 +210,6 @@ next:
 		flatScopes:                    flatScopes,
 		hasSwitchInIterationStatement: hasSwitchInIterationStatement,
 		setJmpInLoop:                  setJmpInLoop,
-		setJmps:                       setJmps,
 		t:                             t,
 	}
 }

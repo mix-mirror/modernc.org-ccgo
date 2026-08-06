@@ -494,6 +494,28 @@ func (c *ctx) setJmpRecover(w writer) {
 	w.w("\nswitch %sx.(%stype) {", pp, pp)
 }
 
+// setJmpRecoverForeign emits, at the head of the LongjmpRetval clause, the guard
+// that lets a longjmp aimed past this region carry on unwinding. C allows jumping
+// to a setjmp of any live frame, so the panic passes through every region between
+// the longjmp and its target, and a region recovering one not meant for it would
+// resume at the wrong setjmp. LongjmpRetval names the buffer that was targeted, so
+// the test is against the one this region armed.
+//
+// pop names the buffer to disarm on the way out, empty when some other handler
+// owns that, exactly as in setJmpRecoverDefault. Longjmp disarms its target
+// itself, so the region that does recognise the value must not disarm again.
+func (c *ctx) setJmpRecoverForeign(w writer, buf, pop string) {
+	pp := tag(preserve)
+	w.w("\nif %sx.(%s%sLongjmpRetval).%sJumpBuffer != %s {", pp, c.task.tlsQualifier, pp, pp, buf)
+	if pop != "" {
+		w.w("\n%stls.%sPopJumpBuffer(%s)", pp, pp, pop)
+	}
+	w.w("\n%spanic(%sx)", pp, pp)
+	// Terminated, the catch emitted next carries the separator of its C source and
+	// that is empty for a one line "if (setjmp(jb)) return x;".
+	w.w("\n};")
+}
+
 // setJmpRecoverDefault emits the default clause of that type switch, reached both
 // when the guarded region completed normally, when the goroutine is unwinding via
 // runtime.Goexit (recover reports nil in both cases) and when a panic other than
@@ -539,27 +561,17 @@ func (c *ctx) setJmpRecoverDefault(w writer, v string) {
 // function returns, so a longjmp from the code following the if still lands at the
 // if, and honouring that takes the function level defer below: it owns the pop and
 // hosts a second copy of catch for a longjmp arriving once the closure can no
-// longer see it. But libc keeps armed buffers on a stack and Longjmp requires its
-// target on top, which agrees with C only while at most one buffer per function is
-// armed — arm a second and a longjmp to the first, which C allows, finds the second
-// on top and panics. So the buffer is left armed only where the function has a
-// single setjmp, and where catch defines no label, since it is emitted twice there.
-// Elsewhere the buffer is dropped when try ends, as before: that loses a longjmp
-// from after the if, loudly, rather than breaking one that works today.
+// longer see it. Several buffers being armed at once is what setJmpRecoverForeign
+// is for.
 //
-// A region inside a loop is left out too, for cost rather than correctness: the
-// push and the function level defer both happen per iteration there, where the
-// shorter arming keeps them at one.
-//
-// setJmps counts the setjmp calls written in the function, so an inline function
-// carrying one of its own into a caller that has exactly one is not counted and
-// can put a second buffer on the stack after all. A longjmp to the outer buffer
-// then panics as above. Lifting the restriction properly, see the handoff, would
-// remove this corner with it.
+// The tail is not armed for a region inside a loop, for cost rather than
+// correctness: the push and the function level defer both happen per iteration
+// there, where dropping the buffer when try ends keeps them at one. Nor where catch
+// defines a label, since it is emitted twice.
 func (c *ctx) setJmpTryCatch(w writer, v string, try, catch *cc.Statement) {
 	pp := tag(preserve)
 	closure := !c.isEmptyStatment(try) && !c.stmtHasJump(try)
-	armTail := closure && c.f.setJmps == 1 && !c.f.setJmpInLoop && !c.stmtHasLabel(catch)
+	armTail := closure && !c.f.setJmpInLoop && !c.stmtHasLabel(catch)
 	if !closure || armTail {
 		func() {
 			c.f.inDefer++
@@ -569,6 +581,7 @@ func (c *ctx) setJmpTryCatch(w writer, v string, try, catch *cc.Statement) {
 			w.w("\ndefer func() {")
 			c.setJmpRecover(w)
 			w.w("\ncase %s%sLongjmpRetval:", c.task.tlsQualifier, pp)
+			c.setJmpRecoverForeign(w, v, v)
 			if catch != nil {
 				w.w("\n{")
 				c.statement(w, catch)
@@ -596,6 +609,7 @@ func (c *ctx) setJmpTryCatch(w writer, v string, try, catch *cc.Statement) {
 	w.w("\ndefer func() {")
 	c.setJmpRecover(w)
 	w.w("\ncase %s%sLongjmpRetval:", c.task.tlsQualifier, pp)
+	c.setJmpRecoverForeign(w, v, pop)
 	w.w("\n%scaught = %strue", pp, pp)
 	c.setJmpRecoverDefault(w, pop)
 	w.w("\n}")
@@ -678,6 +692,7 @@ func (c *ctx) setJmpNeq0(w writer, n *cc.SelectionStatement) (r bool) {
 		w.w("\ndefer func() {")
 		c.setJmpRecover(w)
 		w.w("\ncase %s%sLongjmpRetval:", c.task.tlsQualifier, tag(preserve))
+		c.setJmpRecoverForeign(w, v, v)
 		c.statement(w, n.Statement)
 		c.setJmpRecoverDefault(w, v)
 		w.w("\n}")
@@ -757,6 +772,7 @@ func (c *ctx) setJmpEqM1(w writer, n *cc.SelectionStatement) (r bool) {
 		w.w("\ndefer func() {")
 		c.setJmpRecover(w)
 		w.w("\ncase %s%sLongjmpRetval:", c.task.tlsQualifier, tag(preserve))
+		c.setJmpRecoverForeign(w, v, v)
 		c.statement(w, n.Statement)
 		c.setJmpRecoverDefault(w, v)
 		w.w("\n}")
