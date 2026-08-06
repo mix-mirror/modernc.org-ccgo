@@ -83,6 +83,8 @@ type fnCtx struct {
 	hasSwitchInIterationStatement bool
 	inDefer                       int
 	inlineInfo                    *inlineInfo
+	liveAutovarDecls              map[string][]string       // Go type -> variables to declare
+	liveAutovars                  map[cc.Node]string        // site -> variable, see newLiveAutovarType
 	locals                        map[*cc.Declarator]string // storage: static or automatic, linkage: none -> C renamed
 	maxVaListSize                 int64
 	nextID                        int
@@ -191,6 +193,8 @@ next:
 	return &fnCtx{
 		autovars:                      map[string][]string{},
 		autovarsX:                     map[string]int{},
+		liveAutovarDecls:              map[string][]string{},
+		liveAutovars:                  map[cc.Node]string{},
 		c:                             c,
 		d:                             d,
 		flatScopes:                    flatScopes,
@@ -219,6 +223,33 @@ func (f *fnCtx) newAutovarTyp(n cc.Node, typ string) (nm string) {
 	}
 
 	f.autovars[typ] = append(f.autovars[typ], nm)
+	return nm
+}
+
+// newLiveAutovarType is newAutovarType for a value whose live range outlives the
+// statement that creates it, which rules out the recycling above: rewindAutovars
+// runs at every statement boundary and would hand the same variable out again.
+//
+// A setjmp jump buffer is such a value. It is pushed by the statement opening the
+// guarded region but read by the recovering defer when the region is left, which
+// can be many statements later, so a nested region asking for a buffer in between
+// used to get the same variable and make the outer PopJumpBuffer pop the inner
+// buffer's address.
+//
+// The variable belongs to the site rather than to a position in a handout order,
+// so that pass 2 sees at each site exactly what pass 1 put there no matter how
+// the two passes differ in what they walk. Sites that repeat, an inlined body
+// expanded more than once, do share a variable, which is safe because their live
+// ranges cannot overlap: that would take the site being active inside itself.
+func (f *fnCtx) newLiveAutovarType(n cc.Node, t cc.Type) (nm string) {
+	if nm = f.liveAutovars[n]; nm != "" {
+		return nm
+	}
+
+	nm = f.newAutovarName()
+	f.liveAutovars[n] = nm
+	typ := f.c.typ(n, t)
+	f.liveAutovarDecls[typ] = append(f.liveAutovarDecls[typ], nm)
 	return nm
 }
 
@@ -310,6 +341,9 @@ func (f *fnCtx) declareLocals() string {
 		}
 	}
 	for k, v := range f.autovars {
+		m[k] = append(m[k], v...)
+	}
+	for k, v := range f.liveAutovarDecls {
 		m[k] = append(m[k], v...)
 	}
 	for k, v := range m {

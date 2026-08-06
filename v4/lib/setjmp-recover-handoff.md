@@ -297,26 +297,78 @@ not-implemented diagnostics.
    the original value and stack, and it restores the option of a consumer
    recovering the fault deliberately — impossible today.
 
-### Two adjacent defects found while verifying — neither is this bug
+### Adjacent defects found while verifying — none of them is this bug
 
-Both pre-date the change and were confirmed against a pre-fix build. Neither was
-folded into it.
+All pre-date the recover fix and were confirmed against builds from before it.
 
-- **Nested `setjmp` regions are broken, independently of the recover issue.** Both
-  regions get the same jump-buffer autovar (`var v1 uintptr` — the pool in
-  `fnCtx.newAutovarTyp` recycles per statement via `rewindAutovars`, but a jump
-  buffer's live range spans the whole guarded region). The outer `PopJumpBuffer`
-  is therefore handed the *inner* buffer's address and panics `unsupported
-  setjmp/longjmp usage`. This fires even on the path where nothing jumps at all.
-  Sequential, non-nested regions are fine — verified byte-identical to gcc —
-  because their live ranges do not overlap. Consequence for this handoff: the
-  "quieter benefit" about nesting hygiene does not materialise, since nesting has
-  an earlier and unrelated bug. Worth its own fix.
-- **The defer-hosted-catch forms lose the enclosing function's return value on a
-  real `longjmp`**: gcc returns 11/22/45/67 for the four such sites, ccgo returns
-  0, because the code following the `if` never runs. Already acknowledged in the
-  code comments ("does not propagate a value-producing catch into the code
-  following the if"). The two closure forms get this right.
+**A. Two `setjmp` regions lexically nested in one function shared a jump buffer.
+FIXED**, separately from the recover change. Both regions got the same autovar
+(`var v1 uintptr`): the pool in `fnCtx.newAutovarTyp` recycles per statement via
+`rewindAutovars`, but a jump buffer is read by the recovering defer long after the
+statement that pushed it, so a nested region asking for one in between got the
+same variable. The outer `PopJumpBuffer` was then handed the *inner* buffer's
+address and panicked `unsupported setjmp/longjmp usage` — even on the path where
+nothing jumps at all.
+
+The fix keeps the recycling optimisation (`5975017 performance++: reuse some
+autovars`) and exempts only values whose live range outlives their statement, via
+`fnCtx.newLiveAutovarType`, which owns a variable per *site* rather than per
+position in a handout order. Nested regions now match gcc on all four paths
+(no jump, inner longjmp, fault, outer longjmp after the inner region exits).
+
+Scope of the old bug, for the record: it needed the two regions to be lexically
+nested **in the same function**. Sequential regions in one function were fine
+(their live ranges do not overlap) and so was nesting across a call, the common
+case — verified byte-identical generated code before and after the fix.
+
+**B. The defer-hosted forms cannot resume the code after the `if`.** gcc returns
+11/22/45/67 for the four such sites in the reproducer, ccgo returns 0. This is
+*not* an oversight that switching them to the closure form would repair — see C.
+It is inherent: the catch runs inside the recovering defer, and a Go panic cannot
+be resumed. It does not bite the canonical idiom
+`if (setjmp(jb)) { cleanup(); return -1; }`, because a `return` in the catch is
+routed to the result variable by the `fnCtx.inDefer` mechanism. It bites only when
+the catch falls through to code after the `if`.
+
+**C. The closure form pops the jump buffer too early — a regression from
+`ef21892`.** In C, `setjmp` arms the buffer until the enclosing function returns,
+so a `longjmp` from code *after* the `if` still lands at the `if`. The closure
+form pops on normal completion of the try, so that `longjmp` finds an empty stack:
+
+```c
+static int eq0(void) {
+	if (setjmp(jb) == 0) { printf("  try\n"); }
+	else { printf("  catch\n"); return -1; }
+	printf("  after if\n");
+	g();				/* longjmps to jb */
+	return 0;
+}
+```
+
+gcc, and ccgo built from `ef21892~1`, both print `try / after if / catch` and
+return -1. Current ccgo prints `try / after if` and then panics
+`libc_musl.go:466:PopJumpBuffer TODO unsupported setjmp/longjmp usage`.
+
+Note what this means: the two lowerings model *different* things and neither is
+right on both axes. The defer form gets the buffer's C lifetime right and cannot
+resume; the closure form can resume and truncates the lifetime to the try. Since
+`if (setjmp(jb) == 0) A; else B;` and `if (setjmp(jb) != 0) B; else A;` are the
+same program, ccgo currently compiles logically identical C two different ways —
+the second spelling handles the case above correctly, the first does not.
+
+Getting both right needs the whole remainder of the function inside the
+re-enterable region, which a closure cannot host once that remainder contains a
+`return` or `goto`, i.e. a real control-flow transform rather than a local
+change. Left alone deliberately: this is a design call about which divergence
+matters more for ccgo's consumers, and it is at least loud rather than silent —
+more so now, since a `PopJumpBuffer` panic raised inside another `setjmp` region
+is no longer swallowed.
+
+**D. `longjmp` past an intervening active region is unsupported**, in libc rather
+than in ccgo: `TLS.Longjmp` calls `PopJumpBuffer` on its target, which panics
+unless the target is on top of the stack. Jumping from an inner region straight
+to an outer one therefore panics `unsupported setjmp/longjmp usage` where gcc runs
+the outer catch. Pre-existing, unaffected by any change here, and loud.
 
 ### Not done
 

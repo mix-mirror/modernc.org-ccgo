@@ -571,7 +571,7 @@ func (c *ctx) setJmpNeq0(w writer, n *cc.SelectionStatement) (r bool) {
 		return false
 	}
 
-	v := c.f.newAutovarType(n, c.pvoid)
+	v := c.f.newLiveAutovarType(n, c.pvoid)
 	jb := c.expr(w, arg, nil, exprDefault)
 	w.w("\n%s = %s;", v, jb)
 	w.w("\n%stls.%[1]sPushJumpBuffer(%s)", tag(preserve), v)
@@ -650,7 +650,7 @@ func (c *ctx) setJmpEqM1(w writer, n *cc.SelectionStatement) (r bool) {
 		return false
 	}
 
-	v := c.f.newAutovarType(n, c.pvoid)
+	v := c.f.newLiveAutovarType(n, c.pvoid)
 	jb := c.expr(w, arg, nil, exprDefault)
 	w.w("\n%s = %s;", v, jb)
 	w.w("\n%stls.%[1]sPushJumpBuffer(%s)", tag(preserve), v)
@@ -720,7 +720,7 @@ func (c *ctx) notSetJmp(w writer, n *cc.SelectionStatement) (r bool) {
 		return false
 	}
 
-	v := c.f.newAutovarType(n, c.pvoid)
+	v := c.f.newLiveAutovarType(n, c.pvoid)
 	jb := c.expr(w, arg, nil, exprDefault)
 	pp := tag(preserve)
 	w.w("\n%s = %s;", v, jb)
@@ -818,7 +818,7 @@ func (c *ctx) setJmpEq0(w writer, n *cc.SelectionStatement) (r bool) {
 		return false
 	}
 
-	v := c.f.newAutovarType(n, c.pvoid)
+	v := c.f.newLiveAutovarType(n, c.pvoid)
 	jb := c.expr(w, arg, nil, exprDefault)
 	pp := tag(preserve)
 	w.w("\n%s = %s;", v, jb)
