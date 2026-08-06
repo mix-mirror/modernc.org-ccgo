@@ -346,29 +346,59 @@ static int eq0(void) {
 ```
 
 gcc, and ccgo built from `ef21892~1`, both print `try / after if / catch` and
-return -1. Current ccgo prints `try / after if` and then panics
+return -1. Broken ccgo printed `try / after if` and then panicked
 `libc_musl.go:466:PopJumpBuffer TODO unsupported setjmp/longjmp usage`.
 
-Note what this means: the two lowerings model *different* things and neither is
+What it came down to: the two lowerings modelled *different* things and neither was
 right on both axes. The defer form gets the buffer's C lifetime right and cannot
-resume; the closure form can resume and truncates the lifetime to the try. Since
+resume; the closure form can resume and truncated the lifetime to the try. Since
 `if (setjmp(jb) == 0) A; else B;` and `if (setjmp(jb) != 0) B; else A;` are the
-same program, ccgo currently compiles logically identical C two different ways —
-the second spelling handles the case above correctly, the first does not.
+same program, ccgo compiled logically identical C two different ways — the second
+spelling handled the case above correctly, the first did not.
 
-Getting both right needs the whole remainder of the function inside the
-re-enterable region, which a closure cannot host once that remainder contains a
-`return` or `goto`, i.e. a real control-flow transform rather than a local
-change. Left alone deliberately: this is a design call about which divergence
-matters more for ccgo's consumers, and it is at least loud rather than silent —
-more so now, since a `PopJumpBuffer` panic raised inside another `setjmp` region
-is no longer swallowed.
+**FIXED** by giving the closure form both handlers. The closure keeps reporting a
+longjmp caught during the try, so `ef21892`'s value-producing catch still works,
+and a function level defer now owns the pop and hosts a second copy of the catch
+for a longjmp arriving once the closure can no longer see it. Since `Longjmp` pops
+on its way out, the buffer is pushed again before the catch runs at the level of
+the if: in C it stays armed.
+
+The buffer is left armed only where the function contains a single `setjmp`, and
+where the catch defines no label, since the catch is emitted twice there. That
+restriction is not cosmetic. C keeps every buffer of a live frame valid, libc keeps
+armed buffers on a stack and `Longjmp` requires its target on top, and the two
+agree only while at most one buffer per function is armed. Arm a second and a
+`longjmp` to the first — which C allows, and which the nested reproducer below
+does — finds the second on top and panics. Without the restriction the fix traded
+one divergence for another; with it no case that worked before regresses, and
+generated code for functions with more than one `setjmp` is byte identical to
+before.
+
+Lifting the restriction needs libc, not ccgo: `LongjmpRetval` carries only the
+value, so a recovering defer cannot tell whether a longjmp was meant for its own
+buffer and has to rely on the stack discipline to guarantee it. Give libc a way to
+answer that — a target in the panic value, or an accessor telling a defer whether
+its buffer is still armed — and the arming could be unconditional.
 
 **D. `longjmp` past an intervening active region is unsupported**, in libc rather
 than in ccgo: `TLS.Longjmp` calls `PopJumpBuffer` on its target, which panics
 unless the target is on top of the stack. Jumping from an inner region straight
 to an outer one therefore panics `unsupported setjmp/longjmp usage` where gcc runs
-the outer catch. Pre-existing, unaffected by any change here, and loud.
+the outer catch. Pre-existing, unaffected by any change here, and loud. It is the
+same stack-versus-set mismatch that bounds the fix for C.
+
+### Divergences from the C reference that remain
+
+Measured by building each reproducer with gcc and with ccgo and comparing output
+and exit status. Everything not listed matches gcc exactly, including nested and
+sequential regions, nesting across a call, and the value-producing catch.
+
+| case | gcc | ccgo |
+|---|---|---|
+| fault inside a guarded region | dies on SIGSEGV, exit 139 | panics, exit 2 — the point of the fix, loud either way |
+| longjmp caught by a defer hosted catch that falls through past the `if` | runs the code after the `if` | returns from the function, defect B |
+| longjmp past an intervening active region | runs the outer catch | panics `unsupported setjmp/longjmp usage`, defect D |
+| `setjmp` in a shape the lowering does not match | works | panics `Xsetjmp TODO`, libc has no real `setjmp` |
 
 ### Not done
 

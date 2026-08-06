@@ -507,16 +507,110 @@ func (c *ctx) setJmpRecover(w writer) {
 // LongjmpRetval case does not pop; every other libc panic is a diagnostic that
 // must stay visible.
 //
-// The buffer is popped before re-raising because this frame is leaving either
-// way: that keeps the top of stack invariant PopJumpBuffer asserts valid for the
-// enclosing setjmp regions the panic unwinds into.
+// v names the jump buffer to pop before re-raising, because the frame owning it
+// is leaving either way and the top of stack invariant PopJumpBuffer asserts must
+// hold for the setjmp regions the panic unwinds into. An empty v pops nothing,
+// which is what the try closure in setJmpTryCatch wants: there the buffer outlives
+// the closure and the function level defer owns the pop.
 func (c *ctx) setJmpRecoverDefault(w writer, v string) {
 	pp := tag(preserve)
 	w.w("\n%sdefault:", pp)
-	w.w("\n%stls.%sPopJumpBuffer(%s)", pp, pp, v)
+	if v != "" {
+		w.w("\n%stls.%sPopJumpBuffer(%s)", pp, pp, v)
+	}
 	w.w("\nif %sx != %snil {", pp, pp)
 	w.w("\n%spanic(%sx)", pp, pp)
 	w.w("\n}")
+}
+
+// setJmpTryCatch renders the guarded region of the setjmp==0 and !setjmp shapes.
+// try runs with the jump buffer v, already pushed by the caller, armed; catch runs
+// when a longjmp lands in it. Either may be nil.
+//
+// try runs in a closure that only reports whether a longjmp was caught, so that
+// catch runs at the level of the if rather than inside a recovering defer: its
+// effects, notably the function's result, then reach the code following the if and
+// that code still runs, as in C. A try a closure cannot host, one containing a
+// return/goto/break/continue, and an empty try, which has nothing to guard, leave
+// the recovering defer as the only handler; that defer cannot resume the code
+// following the if.
+//
+// armTail decides how long the buffer stays armed. C arms it until the enclosing
+// function returns, so a longjmp from the code following the if still lands at the
+// if, and honouring that takes the function level defer below: it owns the pop and
+// hosts a second copy of catch for a longjmp arriving once the closure can no
+// longer see it. But libc keeps armed buffers on a stack and Longjmp requires its
+// target on top, which agrees with C only while at most one buffer per function is
+// armed — arm a second and a longjmp to the first, which C allows, finds the second
+// on top and panics. So the buffer is left armed only where the function has a
+// single setjmp, and where catch defines no label, since it is emitted twice there.
+// Elsewhere the buffer is dropped when try ends, as before: that loses a longjmp
+// from after the if, loudly, rather than breaking one that works today.
+//
+// A region inside a loop is left out too, for cost rather than correctness: the
+// push and the function level defer both happen per iteration there, where the
+// shorter arming keeps them at one.
+//
+// setJmps counts the setjmp calls written in the function, so an inline function
+// carrying one of its own into a caller that has exactly one is not counted and
+// can put a second buffer on the stack after all. A longjmp to the outer buffer
+// then panics as above. Lifting the restriction properly, see the handoff, would
+// remove this corner with it.
+func (c *ctx) setJmpTryCatch(w writer, v string, try, catch *cc.Statement) {
+	pp := tag(preserve)
+	closure := !c.isEmptyStatment(try) && !c.stmtHasJump(try)
+	armTail := closure && c.f.setJmps == 1 && !c.f.setJmpInLoop && !c.stmtHasLabel(catch)
+	if !closure || armTail {
+		func() {
+			c.f.inDefer++
+
+			defer func() { c.f.inDefer-- }()
+
+			w.w("\ndefer func() {")
+			c.setJmpRecover(w)
+			w.w("\ncase %s%sLongjmpRetval:", c.task.tlsQualifier, pp)
+			if catch != nil {
+				w.w("\n{")
+				c.statement(w, catch)
+				w.w("\n};")
+			}
+			c.setJmpRecoverDefault(w, v)
+			w.w("\n}")
+			w.w("\n}();")
+		}()
+	}
+	if !closure {
+		if try != nil {
+			w.w("\n{")
+			c.statement(w, try)
+			w.w("\n};")
+		}
+		return
+	}
+
+	pop := v
+	if armTail {
+		pop = "" // The function level defer owns it.
+	}
+	w.w("\nif (func() (%scaught %sbool) {", pp, pp)
+	w.w("\ndefer func() {")
+	c.setJmpRecover(w)
+	w.w("\ncase %s%sLongjmpRetval:", c.task.tlsQualifier, pp)
+	w.w("\n%scaught = %strue", pp, pp)
+	c.setJmpRecoverDefault(w, pop)
+	w.w("\n}")
+	w.w("\n}();")
+	c.statement(w, try)
+	w.w("\nreturn %sfalse", pp)
+	w.w("\n}()) {")
+	if armTail {
+		// Longjmp popped the buffer on its way here and C keeps it armed.
+		w.w("\n%stls.%sPushJumpBuffer(%s);", pp, pp, v)
+	}
+	if catch != nil {
+		c.statement(w, catch)
+	}
+	w.w("\n};")
 }
 
 // C: if (setjmp(jb) != 0) stmt1; else stmt2;
@@ -679,26 +773,41 @@ func (c *ctx) setJmpEqM1(w writer, n *cc.SelectionStatement) (r bool) {
 
 // C: if (!setjmp(jb)) stmt1; else stmt2; // same as: if (setjmp(jb) == 0) stmt1; else stmt2;
 //
-// Go:
+// Go, see setJmpTryCatch for why both handlers are needed:
 //
-//	func(jb) {
-//		tls.PushJumpBuffer(jb)
+//	tls.PushJumpBuffer(jb)
 //
+//	defer func() {
+//		x := recover()
+//		switch x.(type) {
+//		case libc.LongjmpRetval:
+//			stmt2
+//		default:
+//			tls.PopJumpBuffer(jb)
+//			if x != nil {
+//				panic(x)
+//			}
+//		}
+//	}()
+//
+//	if (func() (caught bool) {
 //		defer func() {
 //			x := recover()
 //			switch x.(type) {
 //			case libc.LongjmpRetval:
-//				stmt2
+//				caught = true
 //			default:
-//				tls.PopJumpBuffer(jb)
 //				if x != nil {
 //					panic(x)
 //				}
 //			}
 //		}()
-//
 //		stmt1
-//	}(jb)
+//		return false
+//	}()) {
+//		tls.PushJumpBuffer(jb)
+//		stmt2
+//	}
 func (c *ctx) notSetJmp(w writer, n *cc.SelectionStatement) (r bool) {
 	switch n.Case {
 	case
@@ -722,81 +831,49 @@ func (c *ctx) notSetJmp(w writer, n *cc.SelectionStatement) (r bool) {
 
 	v := c.f.newLiveAutovarType(n, c.pvoid)
 	jb := c.expr(w, arg, nil, exprDefault)
-	pp := tag(preserve)
 	w.w("\n%s = %s;", v, jb)
-	w.w("\n%stls.%sPushJumpBuffer(%s)", pp, pp, v)
-	if c.stmtHasJump(n.Statement) {
-		// The try contains a return/goto/break/continue that the closure form
-		// below cannot host. Fall back to the original form — the catch runs in
-		// the recovering defer. (That form does not propagate a value-producing
-		// catch into the code following the if, but it preserves prior behavior;
-		// wasm2c's exception output has no such jumps in the try.)
-		func() {
-			c.f.inDefer++
-			defer func() { c.f.inDefer-- }()
-			w.w("\ndefer func() {")
-			c.setJmpRecover(w)
-			w.w("\ncase %s%sLongjmpRetval:", c.task.tlsQualifier, pp)
-			if n.Statement2 != nil {
-				w.w("\n{")
-				c.statement(w, n.Statement2)
-				w.w("\n};")
-			}
-			c.setJmpRecoverDefault(w, v)
-			w.w("\n}")
-			w.w("\n}();")
-		}()
-		w.w("\n{")
-		c.statement(w, n.Statement)
-		w.w("\n};")
-		return true
-	}
-	// Run the try (Statement) inside a closure that recovers a longjmp and
-	// reports whether it was caught. The catch (Statement2) then runs at this
-	// level — not inside the recovering defer — so its effects (notably the
-	// function's result value) reach the code that follows the if, just as in
-	// the original C. On normal completion the jump buffer is popped here; on a
-	// longjmp Longjmp has already popped it.
-	w.w("\nif (func() (%scaught %sbool) {", pp, pp)
-	w.w("\ndefer func() {")
-	c.setJmpRecover(w)
-	w.w("\ncase %s%sLongjmpRetval:", c.task.tlsQualifier, pp)
-	w.w("\n%scaught = %strue", pp, pp)
-	c.setJmpRecoverDefault(w, v)
-	w.w("\n}")
-	w.w("\n}();")
-	c.statement(w, n.Statement)
-	w.w("\nreturn %sfalse", pp)
-	w.w("\n}()) {")
-	if n.Statement2 != nil {
-		c.statement(w, n.Statement2)
-	}
-	w.w("\n};")
+	w.w("\n%stls.%[1]sPushJumpBuffer(%s)", tag(preserve), v)
+	c.setJmpTryCatch(w, v, n.Statement, n.Statement2)
 	return true
 }
 
 // C: if (setjmp(jb) == 0) stmt1; else stmt2;
 //
-// Go:
+// Go, see setJmpTryCatch for why both handlers are needed:
 //
-//	func(jb) {
-//		tls.PushJumpBuffer(jb)
+//	tls.PushJumpBuffer(jb)
 //
+//	defer func() {
+//		x := recover()
+//		switch x.(type) {
+//		case libc.LongjmpRetval:
+//			stmt2
+//		default:
+//			tls.PopJumpBuffer(jb)
+//			if x != nil {
+//				panic(x)
+//			}
+//		}
+//	}()
+//
+//	if (func() (caught bool) {
 //		defer func() {
 //			x := recover()
 //			switch x.(type) {
 //			case libc.LongjmpRetval:
-//				stmt2
+//				caught = true
 //			default:
-//				tls.PopJumpBuffer(jb)
 //				if x != nil {
 //					panic(x)
 //				}
 //			}
 //		}()
-//
 //		stmt1
-//	}(jb)
+//		return false
+//	}()) {
+//		tls.PushJumpBuffer(jb)
+//		stmt2
+//	}
 func (c *ctx) setJmpEq0(w writer, n *cc.SelectionStatement) (r bool) {
 	switch n.Case {
 	case
@@ -820,56 +897,9 @@ func (c *ctx) setJmpEq0(w writer, n *cc.SelectionStatement) (r bool) {
 
 	v := c.f.newLiveAutovarType(n, c.pvoid)
 	jb := c.expr(w, arg, nil, exprDefault)
-	pp := tag(preserve)
 	w.w("\n%s = %s;", v, jb)
-	w.w("\n%stls.%sPushJumpBuffer(%s)", pp, pp, v)
-	if c.stmtHasJump(n.Statement) {
-		// The try contains a return/goto/break/continue that the closure form
-		// below cannot host. Fall back to the original form — the catch runs in
-		// the recovering defer. (That form does not propagate a value-producing
-		// catch into the code following the if, but it preserves prior behavior;
-		// wasm2c's exception output has no such jumps in the try.)
-		func() {
-			c.f.inDefer++
-			defer func() { c.f.inDefer-- }()
-			w.w("\ndefer func() {")
-			c.setJmpRecover(w)
-			w.w("\ncase %s%sLongjmpRetval:", c.task.tlsQualifier, pp)
-			if n.Statement2 != nil {
-				w.w("\n{")
-				c.statement(w, n.Statement2)
-				w.w("\n};")
-			}
-			c.setJmpRecoverDefault(w, v)
-			w.w("\n}")
-			w.w("\n}();")
-		}()
-		w.w("\n{")
-		c.statement(w, n.Statement)
-		w.w("\n};")
-		return true
-	}
-	// Run the try (Statement) inside a closure that recovers a longjmp and
-	// reports whether it was caught. The catch (Statement2) then runs at this
-	// level — not inside the recovering defer — so its effects (notably the
-	// function's result value) reach the code that follows the if, just as in
-	// the original C. On normal completion the jump buffer is popped here; on a
-	// longjmp Longjmp has already popped it.
-	w.w("\nif (func() (%scaught %sbool) {", pp, pp)
-	w.w("\ndefer func() {")
-	c.setJmpRecover(w)
-	w.w("\ncase %s%sLongjmpRetval:", c.task.tlsQualifier, pp)
-	w.w("\n%scaught = %strue", pp, pp)
-	c.setJmpRecoverDefault(w, v)
-	w.w("\n}")
-	w.w("\n}();")
-	c.statement(w, n.Statement)
-	w.w("\nreturn %sfalse", pp)
-	w.w("\n}()) {")
-	if n.Statement2 != nil {
-		c.statement(w, n.Statement2)
-	}
-	w.w("\n};")
+	w.w("\n%stls.%[1]sPushJumpBuffer(%s)", tag(preserve), v)
+	c.setJmpTryCatch(w, v, n.Statement, n.Statement2)
 	return true
 }
 
@@ -907,6 +937,23 @@ func (c *ctx) stmtHasJump(n cc.Node) (yes bool) {
 
 				yes = true
 			}
+		}
+	})
+	return yes
+}
+
+// stmtHasLabel reports whether the statement tree defines a label. setJmpTryCatch
+// emits the catch twice, at the level of the if and in the function level defer,
+// and a label definition cannot be emitted twice. Any label counts, including the
+// case and default of a switch, which selectionStatementFlat turns into labels.
+func (c *ctx) stmtHasLabel(n cc.Node) (yes bool) {
+	if n == nil {
+		return false
+	}
+
+	walkC(n, func(n cc.Node, mode int) {
+		if _, ok := n.(*cc.LabeledStatement); ok {
+			yes = true
 		}
 	})
 	return yes
