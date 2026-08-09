@@ -1,9 +1,15 @@
 # Handoff: the `setjmp` lowering swallows every panic (silent `exit(0)` on a fault)
 
-Status: **FIXED** in the ccgo working tree, uncommitted. See "Resolution" at the
-end for what was changed, what was verified, and answers to the five open
-questions. Reported against ccgo `v4.34.7-0.20260805164225-484bae2893ff`.
-Filed by the `modernc.org/xetex` side.
+Status: **RESOLVED and released** in `v4.35.0` (commits `850923f`, `4a53405`).
+See "Resolution" at the end for what was changed, what was verified, and answers
+to the five open questions. Reported against ccgo
+`v4.34.7-0.20260805164225-484bae2893ff`. Filed by the `modernc.org/xetex` side.
+
+Re-checked from the reporting side on 2026-08-09 against `v4.35.0`: the original
+three-case reproducer (normal completion / real `longjmp` / nil store inside the
+try) now gives exit 0 / exit 0 / exit 2 with
+`panic: … [recovered, repanicked]`, where pre-fix it gave 0 / 0 / **0**. Nothing
+outstanding from this repo's point of view.
 
 ## TL;DR
 
