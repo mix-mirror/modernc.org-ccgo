@@ -5193,14 +5193,19 @@ out:
 	return &b, rt, rmode
 }
 
-func (c *ctx) stringCharConst(b byte, t cc.Type) string {
-	switch {
-	case b >= ' ' && b < 0x7f:
-		return strconv.QuoteRuneToASCII(rune(b))
-	case cc.IsSignedInteger(t):
-		return fmt.Sprint(int8(b))
+func (c *ctx) stringCharConst(b byte, t cc.Type) string { return c.charConst(uint64(b), t) }
+
+// charConst returns the constant of the integer type t with the value ch of a
+// character of a string literal.
+func (c *ctx) charConst(ch uint64, t cc.Type) string {
+	switch sz := t.Size(); {
+	case ch >= ' ' && ch < 0x7f:
+		return strconv.QuoteRuneToASCII(rune(ch))
+	case cc.IsSignedInteger(t) && sz > 0 && sz < 8:
+		sh := 64 - 8*sz
+		return fmt.Sprint(int64(ch<<sh) >> sh)
 	default:
-		return fmt.Sprint(b)
+		return fmt.Sprint(ch)
 	}
 }
 

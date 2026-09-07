@@ -229,3 +229,40 @@ int main(void) {
 		t.Fatalf("got\n%s\nexpected\n%s", g, exp)
 	}
 }
+
+// TestIssue66 verifies that a string literal initializing a char array is
+// split into its characters when later initializers designate elements of
+// the array, which override the characters.
+//
+// See https://gitlab.com/cznic/ccgo/-/issues/66
+func TestIssue66(t *testing.T) {
+	const src = `
+#include <stdio.h>
+#include <wchar.h>
+struct CS { char s[4]; int n; } cs = { .s = "abc", .s[1] = 'x' };
+struct CS cs2 = { "abc", .s[3] = 'd' };
+struct CS cs3 = { .s[1] = 'x', .s = "abc" };
+struct S8 { char s[8]; int n; } s8 = { .s = "abc", .s[6] = 'q', .n = 1 };
+struct S3 { char s[3]; int n; } s3 = { .s = "abc", .s[1] = 'x' };
+struct CS z = { .s = "", .s[1] = 'x' };
+struct CS z2 = { .s = "abc", .s[1] = 0 };
+char s5[2][4] = { "abc", "def", [0][1] = 'x', [1][2] = 'y' };
+struct WS { wchar_t w[4]; } ws = { .w = L"abc", .w[1] = L'x' };
+union U { char s[4]; int i; } u = { .s = "abc", .s[1] = 'x' };
+struct LU { union U u; char s[4]; };
+int main(void) {
+	struct CS l = { .s = "abc", .s[1] = 'x' };
+	struct LU lu = { .s = "abc", .s[1] = 'x' };
+	struct LU *plu = &lu;
+	printf("%s %d | %.4s %d | %s | %s %d %d %d | %.3s %d | %d %d %d | %s | %s %s\n", cs.s, cs.n, cs2.s, cs2.n, cs3.s, s8.s, s8.s[6], s8.s[7], s8.n, s3.s, s3.n, z.s[0], z.s[1], z.s[2], z2.s, s5[0], s5[1]);
+	printf("%d %d %d %d | %s | %s | %s\n", (int)ws.w[0], (int)ws.w[1], (int)ws.w[2], (int)ws.w[3], u.s, l.s, plu->s);
+	return 0;
+}
+`
+	// gcc 13.
+	const exp = `axc 0 | abcd 0 | abc | abc 113 0 1 | axc 0 | 0 120 0 | a | axc dey
+97 120 99 0 | axc | axc | axc`
+	if g := testHostCCvsCcgo(t, src); g != exp {
+		t.Fatalf("got\n%s\nexpected\n%s", g, exp)
+	}
+}

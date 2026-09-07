@@ -376,18 +376,76 @@ func (c *ctx) initializerArray(w writer, n cc.Node, a []initItem, t *cc.ArrayTyp
 
 	et := t.Elem()
 	esz := et.Size()
+	// A string literal initializing the whole array is kept by initOverrides
+	// when later initializers designate elements of the array, because it
+	// cannot be split. Split it here into its characters, the designated
+	// elements override them, like in gcc. See issue #66.
+	var chars []string
+	for i, v := range a {
+		if v.off == off0 && v.in.Type().Kind() == cc.Array && v.in.Type().Size() == t.Size() {
+			if chars = c.stringChars(v.in.Value(), t); chars != nil {
+				a = append(a[:i:i], a[i+1:]...)
+				break
+			}
+		}
+	}
+	next := int64(0) // Index of the first character in chars not yet rendered.
+	renderChars := func(upto int64) {
+		for ; next < upto && next < int64(len(chars)); next++ {
+			if chars[next] != "" {
+				b.w("\n%d: %s, ", next, chars[next])
+			}
+		}
+	}
 	s := sortInitItems(a, func(n int64) int64 { n -= off0; return n - n%esz })
 	for _, v := range s {
 		off := v[0].off - off0
 		off -= off % esz
+		i := off / esz
+		renderChars(i)
+		next = i + 1 // Overridden.
 		if !c.isZeroInitializerSlice(v) || !cc.IsArithmeticType(et) {
 			if s := c.initializer(w, n, v, et, off0+off, true); !bytes.Equal(s.bytes(), zeroFuncPtr) {
-				b.w("\n%d: %s, ", off/esz, s)
+				b.w("\n%d: %s, ", i, s)
 			}
 		}
 	}
+	renderChars(int64(len(chars)))
 	b.w("\n}")
 	return &b
+}
+
+// stringChars returns the characters of v, the value of a string literal
+// initializing an array of type t, rendered as constants of the element type,
+// the zero ones as "", or nil when v is not a string literal.
+func (c *ctx) stringChars(v cc.Value, t *cc.ArrayType) (r []string) {
+	var a []uint64
+	switch x := v.(type) {
+	case cc.StringValue:
+		for _, ch := range []byte(x) {
+			a = append(a, uint64(ch))
+		}
+	case cc.UTF16StringValue:
+		for _, ch := range x {
+			a = append(a, uint64(ch))
+		}
+	case cc.UTF32StringValue:
+		for _, ch := range x {
+			a = append(a, uint64(ch))
+		}
+	default:
+		return nil
+	}
+	if max := t.Len(); max >= 0 && int64(len(a)) > max {
+		a = a[:max]
+	}
+	r = make([]string, len(a))
+	for i, ch := range a {
+		if ch != 0 {
+			r[i] = c.charConst(ch, t.Elem())
+		}
+	}
+	return r
 }
 
 func (c *ctx) initializerStruct(w writer, n cc.Node, a []initItem, t *cc.StructType, off0 int64) (r *buf) {
