@@ -1256,38 +1256,6 @@ func bpAlign(t cc.Type) (r int64) {
 	return r
 }
 
-func sortInitializers(a []*cc.Initializer, group func(int64) int64) (r [][]*cc.Initializer) {
-	// [0]6.7.8/23: The order in which any side effects occur among the
-	// initialization list expressions is unspecified.
-	m := map[int64][]*cc.Initializer{}
-	for _, v := range a {
-		off := group(v.Offset())
-		m[off] = append(m[off], v)
-	}
-	for _, v := range m {
-		sort.Slice(v, func(i, j int) bool {
-			a, b := v[i].Offset(), v[j].Offset()
-			if a < b {
-				return true
-			}
-
-			if a > b {
-				return false
-			}
-
-			c, d := v[i].Field(), v[j].Field()
-			if c == nil || d != nil {
-				return false
-			}
-
-			return c.Index() < d.Index()
-		})
-		r = append(r, v)
-	}
-	sort.Slice(r, func(i, j int) bool { return r[i][0].Offset() < r[j][0].Offset() })
-	return r
-}
-
 //lint:ignore U1000 debug helper
 func dumpInitializer(a []*cc.Initializer, pref string) {
 	for _, v := range a {

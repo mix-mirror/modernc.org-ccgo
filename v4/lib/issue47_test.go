@@ -5,11 +5,7 @@
 package ccgo
 
 import (
-	"bytes"
-	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -52,89 +48,7 @@ int main() {
 }
 `)
 
-	dir, err := os.MkdirTemp("", "ccgo-issue47-")
-	if err != nil {
-		t.Fatal(err)
+	if out := testHostCCvsCcgo(t, string(cSrc)); !strings.HasSuffix(out, "PASS") {
+		t.Fatalf("unexpected output %q", out)
 	}
-	defer os.RemoveAll(dir)
-
-	// Write C source.
-	cFile := filepath.Join(dir, "test.c")
-	if err := os.WriteFile(cFile, cSrc, 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	// ---- Step 1: Compile & run with hostCC ----
-	bin := filepath.Join(dir, enforceBinaryExt("cbin"))
-	if out, err := exec.Command(hostCC, "-o", bin, "-w", cFile, "-lm", "-lpthread").CombinedOutput(); err != nil {
-		t.Fatalf("hostCC failed: %v\n%s", err, out)
-	}
-	cOut, err := exec.Command(bin).Output()
-	if err != nil {
-		t.Fatalf("C binary failed: %v", err)
-	}
-
-	// ---- Step 2: Transpile with ccgo ----
-	goFile := filepath.Join(dir, "test.go")
-	var stdout, stderr bytes.Buffer
-	task := NewTask(
-		goos,
-		goarch,
-		[]string{
-			"ccgo",
-			"-o", goFile,
-			"-verify-types",
-			"--prefix-field=F",
-			"-ignore-unsupported-alignment",
-			"-ignore-vector-functions",
-			"-positions",
-			"-full-paths",
-			cFile,
-		},
-		&stdout, &stderr, nil,
-	)
-	if err := task.Main(); err != nil {
-		t.Fatalf("ccgo failed:\nstdout: %s\nstderr: %s\nerr: %v", stdout.Bytes(), stderr.Bytes(), err)
-	}
-	t.Logf("ccgo OK")
-
-	// ---- Step 3: Build Go binary ----
-	if err := inDir(dir, func() error {
-		if out, err := exec.Command("go", "mod", "init", "test").CombinedOutput(); err != nil {
-			return fmt.Errorf("go mod init: %v\n%s", err, out)
-		}
-		if out, err := exec.Command("go", "get", *oLibc+libcVersion).CombinedOutput(); err != nil {
-			return fmt.Errorf("go get: %v\n%s", err, out)
-		}
-		goBin := filepath.Join(dir, enforceBinaryExt("gobin"))
-		if out, err := exec.Command("go", "build", "-o", goBin, goFile).CombinedOutput(); err != nil {
-			return fmt.Errorf("go build: %v\n%s", err, out)
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	// ---- Step 4: Run Go binary ----
-	goBin := filepath.Join(dir, enforceBinaryExt("gobin"))
-	goOut, err := exec.Command(goBin).Output()
-	if err != nil {
-		t.Fatalf("Go binary failed: %v", err)
-	}
-
-	// ---- Step 5: Compare outputs ----
-	cOut = bytes.TrimSpace(cOut)
-	goOut = bytes.TrimSpace(goOut)
-	// Normalize CRLF -> LF: on Windows the hostCC binary writes text-mode
-	// stdout (\r\n) while ccgo's libc emits \n. TestExec does the same.
-	if bytes.Contains(cOut, []byte("\r\n")) {
-		cOut = bytes.ReplaceAll(cOut, []byte("\r"), nil)
-	}
-	if bytes.Contains(goOut, []byte("\r\n")) {
-		goOut = bytes.ReplaceAll(goOut, []byte("\r"), nil)
-	}
-	if !bytes.Equal(cOut, goOut) {
-		t.Fatalf("output mismatch\nC:  %q\nGo: %q", cOut, goOut)
-	}
-	t.Logf("output: %s", cOut)
 }

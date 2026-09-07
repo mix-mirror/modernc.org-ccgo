@@ -27,27 +27,207 @@ type initPatch struct {
 	b   *buf
 }
 
-func (c *ctx) initializerOuter(w writer, n *cc.Initializer, t cc.Type) (r *buf) {
-	a := c.initalizerFlatten(n, nil)
-	return c.initializer(w, n, a, t, 0, false)
+// initItem is a leaf of an initializer, ie. an assignment expression, and the
+// offset of the subobject it initializes, relative to the object of the
+// outermost initializer. The offset is in.Offset(), except for the copies of a
+// leaf replicated over the elements of a [lo ... hi] range designator: cc
+// reports the offset within the first element of the range and every copy is
+// shifted to the element it initializes.
+type initItem struct {
+	in  *cc.Initializer
+	off int64
 }
 
-func (c *ctx) initalizerFlatten(n *cc.Initializer, a []*cc.Initializer) (r []*cc.Initializer) {
-	r = a
+func (c *ctx) initializerOuter(w writer, n *cc.Initializer, t cc.Type) (r *buf) {
+	return c.initializer(w, n, c.initItems(n, t), t, 0, false)
+}
+
+// initItems returns the leaves of n, an initializer of an object of type t,
+// in source order. A leaf designated for a range of array elements is
+// replicated over the range. A leaf overridden by a later initializer is
+// dropped, see initOverrides.
+func (c *ctx) initItems(n *cc.Initializer, t cc.Type) []initItem {
+	o := newInitOverrides()
+	c.initItems0(n, t, []int64{0}, o)
+	return o.items()
+}
+
+// initItemsList is initItems for a brace enclosed list that has no
+// Initializer node of its own, ie. the list of a compound literal of type t.
+func (c *ctx) initItemsList(l *cc.InitializerList, t cc.Type) []initItem {
+	o := newInitOverrides()
+	for ; l != nil; l = l.InitializerList {
+		c.initItems0(l.Initializer, t, []int64{0}, o)
+	}
+	return o.items()
+}
+
+// initItems0 adds to o the leaves of n, an item of a brace enclosed list
+// initializing an object of type t, shifted by every offset in shifts.
+func (c *ctx) initItems0(n *cc.Initializer, t cc.Type, shifts []int64, o *initOverrides) {
+	if ln := n.Len(); ln > 1 {
+		// [lo ... hi]: n initializes ln consecutive elements of the array the
+		// list initializes and so does every leaf of n. cc accepts a range only
+		// in the outermost array of a brace enclosed list, so the stride is the
+		// element size of t.
+		x, ok := t.(*cc.ArrayType)
+		if !ok {
+			c.err(errorf("%v: TODO range designator in an initializer of %s", n.Position(), t))
+			return
+		}
+
+		stride := x.Elem().Size()
+		var a []int64
+		for _, sh := range shifts {
+			for i := int64(0); i < ln; i++ {
+				a = append(a, sh+i*stride)
+			}
+		}
+		shifts = a
+	}
 	switch n.Case {
 	case cc.InitializerExpr: // AssignmentExpression
-		return append(r, n)
+		for _, sh := range shifts {
+			o.add(n, n.Offset()+sh, true)
+		}
 	case cc.InitializerInitList: // '{' InitializerList ',' '}'
+		for _, sh := range shifts {
+			o.add(n, n.Offset()+sh, false)
+		}
 		for l := n.InitializerList; l != nil; l = l.InitializerList {
-			r = append(r, c.initalizerFlatten(l.Initializer, nil)...)
+			c.initItems0(l.Initializer, n.Type(), shifts, o)
 		}
 	default:
 		c.err(errorf("internal error %T %v", n, n.Case))
 	}
+}
+
+// initOverrides collects the leaves of an initializer and drops the ones a
+// later initializer overrides.
+//
+// [0]6.7.9/19: The initialization shall occur in initializer list order, each
+// initializer provided for a particular subobject overriding any previously
+// listed initializer for the same subobject. Like gcc and clang, a brace
+// enclosed initializer of an aggregate overrides the earlier initializers of
+// all of its parts and an initializer of a union member overrides the earlier
+// initializers of the other members: an initializer overrides every earlier
+// leaf whose storage it overlaps. The exception is an expression initializing
+// a whole aggregate, a string literal for instance, that cannot be split: a
+// later initializer of a part of the aggregate keeps it.
+type initOverrides struct {
+	leaves []initItem // All of them, the overridden ones with in == nil.
+	// Indices of the leaves, keyed by every 64 byte window of the initialized
+	// object a leaf overlaps.
+	windows map[int64][]int
+}
+
+const initWindowBits = 9 // 2^9 bits = 64 bytes.
+
+func newInitOverrides() *initOverrides { return &initOverrides{windows: map[int64][]int{}} }
+
+// initBits returns the range of bits [lo, hi) of the object the initializer
+// in, shifted to off, initializes.
+func initBits(in *cc.Initializer, off int64) (lo, hi int64) {
+	lo = 8 * off
+	if f := in.Field(); f != nil && f.IsBitfield() {
+		lo += int64(f.OffsetBits())
+		return lo, lo + int64(f.ValueBits())
+	}
+
+	if sz := in.Type().Size(); sz > 0 {
+		return lo, lo + 8*sz
+	}
+
+	return lo, lo
+}
+
+// add drops the earlier leaves the initializer in, shifted to off, overrides
+// and appends in when it's a leaf.
+func (o *initOverrides) add(in *cc.Initializer, off int64, leaf bool) {
+	lo, hi := initBits(in, off)
+	if lo < hi {
+		for w := lo >> initWindowBits; w <= (hi-1)>>initWindowBits; w++ {
+			for _, i := range o.windows[w] {
+				it := &o.leaves[i]
+				if it.in == nil {
+					continue
+				}
+
+				lo2, hi2 := initBits(it.in, it.off)
+				if lo2 >= hi || hi2 <= lo {
+					continue
+				}
+
+				if lo2 <= lo && hi <= hi2 && (lo2 < lo || hi < hi2) {
+					switch it.in.Type().Kind() {
+					case cc.Array, cc.Struct, cc.Union:
+						continue
+					}
+				}
+
+				it.in = nil
+			}
+		}
+	}
+	if !leaf {
+		return
+	}
+
+	i := len(o.leaves)
+	o.leaves = append(o.leaves, initItem{in, off})
+	if lo < hi {
+		for w := lo >> initWindowBits; w <= (hi-1)>>initWindowBits; w++ {
+			o.windows[w] = append(o.windows[w], i)
+		}
+	}
+}
+
+// items returns the leaves not overridden, in source order.
+func (o *initOverrides) items() (r []initItem) {
+	for _, v := range o.leaves {
+		if v.in != nil {
+			r = append(r, v)
+		}
+	}
 	return r
 }
 
-func (c *ctx) initializer(w writer, n cc.Node, a []*cc.Initializer, t cc.Type, off0 int64, arrayElem bool) (r *buf) {
+// sortInitItems groups the items by the subobject they initialize, as
+// identified by group(offset), and orders the groups and the items within
+// them by offset.
+func sortInitItems(a []initItem, group func(int64) int64) (r [][]initItem) {
+	// [0]6.7.8/23: The order in which any side effects occur among the
+	// initialization list expressions is unspecified.
+	m := map[int64][]initItem{}
+	for _, v := range a {
+		off := group(v.off)
+		m[off] = append(m[off], v)
+	}
+	for _, v := range m {
+		sort.Slice(v, func(i, j int) bool {
+			a, b := v[i].off, v[j].off
+			if a < b {
+				return true
+			}
+
+			if a > b {
+				return false
+			}
+
+			c, d := v[i].in.Field(), v[j].in.Field()
+			if c == nil || d == nil {
+				return false
+			}
+
+			return c.Index() < d.Index()
+		})
+		r = append(r, v)
+	}
+	sort.Slice(r, func(i, j int) bool { return r[i][0].off < r[j][0].off })
+	return r
+}
+
+func (c *ctx) initializer(w writer, n cc.Node, a []initItem, t cc.Type, off0 int64, arrayElem bool) (r *buf) {
 	if cc.IsScalarType(t) {
 		if len(a) == 0 {
 			c.err(errorf("TODO"))
@@ -55,20 +235,20 @@ func (c *ctx) initializer(w writer, n cc.Node, a []*cc.Initializer, t cc.Type, o
 		}
 
 		in := a[0]
-		if in.Offset()-off0 != 0 && in.Len() == 1 {
+		if in.off != off0 {
 			c.err(errorf("TODO"))
 			return nil
 		}
 
-		if t.Kind() == cc.Ptr && in.AssignmentExpression.Type().Undecay().Kind() == cc.Array {
-			switch x := c.unparen(in.AssignmentExpression).(type) {
+		if t.Kind() == cc.Ptr && in.in.AssignmentExpression.Type().Undecay().Kind() == cc.Array {
+			switch x := c.unparen(in.in.AssignmentExpression).(type) {
 			case *cc.PostfixExpression:
 				if x.Case != cc.PostfixExpressionComplit {
 					break
 				}
 
-				t := in.AssignmentExpression.Type().Undecay().(*cc.ArrayType)
-				r = c.topExpr(w, in.AssignmentExpression, t, exprDefault)
+				t := in.in.AssignmentExpression.Type().Undecay().(*cc.ArrayType)
+				r = c.topExpr(w, in.in.AssignmentExpression, t, exprDefault)
 				switch {
 				case c.initPatch != nil:
 					nm := fmt.Sprintf("%s__ccgo_init_%d", tag(staticInternal), c.id())
@@ -81,10 +261,10 @@ func (c *ctx) initializer(w writer, n cc.Node, a []*cc.Initializer, t cc.Type, o
 				}
 			}
 		}
-		r = c.topExpr(w, in.AssignmentExpression, t, exprDefault)
+		r = c.topExpr(w, in.in.AssignmentExpression, t, exprDefault)
 
-		isFuncPtr := t.Kind() == cc.Ptr && t.(*cc.PointerType).Elem().Kind() == cc.Function || c.mentionsFunc(in.AssignmentExpression)
-		isCyclic := c.declBeingInitialized != nil && c.mentionsDecl(in.AssignmentExpression, c.declBeingInitialized)
+		isFuncPtr := t.Kind() == cc.Ptr && t.(*cc.PointerType).Elem().Kind() == cc.Function || c.mentionsFunc(in.in.AssignmentExpression)
+		isCyclic := c.declBeingInitialized != nil && c.mentionsDecl(in.in.AssignmentExpression, c.declBeingInitialized)
 
 		if t.Kind() == cc.Ptr && c.initPatch != nil && (isFuncPtr || isCyclic) {
 			c.initPatch(off0, r)
@@ -98,21 +278,21 @@ func (c *ctx) initializer(w writer, n cc.Node, a []*cc.Initializer, t cc.Type, o
 
 	switch x := t.(type) {
 	case *cc.ArrayType:
-		if len(a) == 1 && a[0].Type().Kind() == cc.Array && a[0].Value() != cc.Unknown {
-			return c.expr(w, a[0].AssignmentExpression, t, exprDefault)
+		if len(a) == 1 && a[0].in.Type().Kind() == cc.Array && a[0].in.Value() != cc.Unknown {
+			return c.expr(w, a[0].in.AssignmentExpression, t, exprDefault)
 		}
 
 		return c.initializerArray(w, n, a, x, off0)
 	case *cc.StructType:
-		if len(a) == 1 && a[0].Type().Kind() == cc.Struct && t.Size() == a[0].Type().Size() {
-			return c.expr(w, a[0].AssignmentExpression, t, exprDefault)
+		if len(a) == 1 && a[0].in.Type().Kind() == cc.Struct && t.Size() == a[0].in.Type().Size() {
+			return c.expr(w, a[0].in.AssignmentExpression, t, exprDefault)
 		}
 
 		return c.initializerStruct(w, n, a, x, off0)
 	case *cc.UnionType:
-		if len(a) == 1 && a[0].Type().Kind() == cc.Union && a[0].Type().Size() == x.Size() {
-			r := c.expr(w, a[0].AssignmentExpression, t, exprDefault)
-			r.n = a[0].AssignmentExpression
+		if len(a) == 1 && a[0].in.Type().Kind() == cc.Union && a[0].in.Type().Size() == x.Size() {
+			r := c.expr(w, a[0].in.AssignmentExpression, t, exprDefault)
+			r.n = a[0].in.AssignmentExpression
 			return r
 		}
 
@@ -176,9 +356,9 @@ func (c *ctx) mentionsFunc(n cc.ExpressionNode) bool {
 	return false
 }
 
-func (c *ctx) isZeroInitializerSlice(s []*cc.Initializer) bool {
+func (c *ctx) isZeroInitializerSlice(s []initItem) bool {
 	for _, v := range s {
-		if !c.isZero(v.AssignmentExpression.Value()) {
+		if !c.isZero(v.in.AssignmentExpression.Value()) {
 			return false
 		}
 	}
@@ -186,7 +366,7 @@ func (c *ctx) isZeroInitializerSlice(s []*cc.Initializer) bool {
 	return true
 }
 
-func (c *ctx) initializerArray(w writer, n cc.Node, a []*cc.Initializer, t *cc.ArrayType, off0 int64) (r *buf) {
+func (c *ctx) initializerArray(w writer, n cc.Node, a []initItem, t *cc.ArrayType, off0 int64) (r *buf) {
 	var b buf
 	b.w("%s{", c.typ(n, t))
 	if c.isZeroInitializerSlice(a) {
@@ -196,72 +376,13 @@ func (c *ctx) initializerArray(w writer, n cc.Node, a []*cc.Initializer, t *cc.A
 
 	et := t.Elem()
 	esz := et.Size()
-	s := sortInitializers(a, func(n int64) int64 { n -= off0; return n - n%esz })
-	ranged := false
+	s := sortInitItems(a, func(n int64) int64 { n -= off0; return n - n%esz })
 	for _, v := range s {
-		if v[0].Len() != 1 {
-			ranged = true
-			break
-		}
-	}
-	switch {
-	case ranged:
-		type expanded struct {
-			s   *cc.Initializer
-			off int64
-		}
-		m := map[int64]*expanded{}
-		for _, vs := range s {
-			for _, v := range vs {
-				off := v.Offset() - off0
-				off -= off % esz
-				x := off / esz
-				switch ln := v.Len(); {
-				case ln != 1:
-					for i := int64(0); i < ln; i++ {
-						if ex, ok := m[x]; !ok || ex.s.Order() < v.Order() {
-							m[x] = &expanded{v, off0 + off + i*esz}
-						}
-						x++
-					}
-				default:
-					if ex, ok := m[x]; !ok || ex.s.Order() < v.Order() {
-						m[x] = &expanded{v, off0 + off}
-					}
-				}
-			}
-		}
-		var a []int64
-		for k := range m {
-			a = append(a, k)
-		}
-		sort.Slice(a, func(i, j int) bool { return a[i] < a[j] })
-		for _, k := range a {
-			v := m[k]
-			if !c.isZeroInitializerSlice([]*cc.Initializer{v.s}) || !cc.IsArithmeticType(et) {
-				if s := c.initializer(w, n, []*cc.Initializer{v.s}, et, v.off, true); !bytes.Equal(s.bytes(), zeroFuncPtr) {
-					b.w("\n%d: %s, ", k, s)
-				}
-			}
-		}
-	default:
-		for _, v := range s {
-			v0 := v[0]
-			off := v0.Offset() - off0
-			off -= off % esz
-			switch ln := v0.Len(); {
-			case ln != 1:
-				for i := int64(0); i < ln; i++ {
-					b.w("\n%d: %s, ", off/esz+i, c.initializer(w, n, v, et, off0+off+i*esz, true))
-				}
-			default:
-				off := v[0].Offset() - off0
-				off -= off % esz
-				if !c.isZeroInitializerSlice(v) || !cc.IsArithmeticType(et) {
-					if s := c.initializer(w, n, v, et, off0+off, true); !bytes.Equal(s.bytes(), zeroFuncPtr) {
-						b.w("\n%d: %s, ", off/esz, s)
-					}
-				}
+		off := v[0].off - off0
+		off -= off % esz
+		if !c.isZeroInitializerSlice(v) || !cc.IsArithmeticType(et) {
+			if s := c.initializer(w, n, v, et, off0+off, true); !bytes.Equal(s.bytes(), zeroFuncPtr) {
+				b.w("\n%d: %s, ", off/esz, s)
 			}
 		}
 	}
@@ -269,7 +390,7 @@ func (c *ctx) initializerArray(w writer, n cc.Node, a []*cc.Initializer, t *cc.A
 	return &b
 }
 
-func (c *ctx) initializerStruct(w writer, n cc.Node, a []*cc.Initializer, t *cc.StructType, off0 int64) (r *buf) {
+func (c *ctx) initializerStruct(w writer, n cc.Node, a []initItem, t *cc.StructType, off0 int64) (r *buf) {
 	var b buf
 	switch {
 	case t.HasFlexibleArrayMember():
@@ -319,7 +440,7 @@ func (c *ctx) initializerStruct(w writer, n cc.Node, a []*cc.Initializer, t *cc.
 
 		break
 	}
-	s := sortInitializers(a, func(off int64) int64 {
+	s := sortInitItems(a, func(off int64) int64 {
 		off -= off0
 		i := sort.Search(len(flds), func(i int) bool {
 			return flds[i].OuterGroupOffset() >= off
@@ -332,7 +453,7 @@ func (c *ctx) initializerStruct(w writer, n cc.Node, a []*cc.Initializer, t *cc.
 	})
 	for _, v := range s {
 		first := v[0]
-		off := first.Offset() - off0
+		off := first.off - off0
 		for off > flds[0].Offset()+flds[0].Type().Size()-1 {
 			flds = flds[1:]
 			if len(flds) == 0 {
@@ -346,7 +467,7 @@ func (c *ctx) initializerStruct(w writer, n cc.Node, a []*cc.Initializer, t *cc.
 			}
 			b.w("\n%s__ccgo%d: ", tag(field), f.OuterGroupOffset())
 			sort.Slice(v, func(i, j int) bool {
-				a, b := v[i].Field(), v[j].Field()
+				a, b := v[i].in.Field(), v[j].in.Field()
 				return a.Offset()*8+int64(a.OffsetBits()) < b.Offset()*8+int64(b.OffsetBits())
 			})
 			ogo := f.OuterGroupOffset()
@@ -355,15 +476,15 @@ func (c *ctx) initializerStruct(w writer, n cc.Node, a []*cc.Initializer, t *cc.
 				if i != 0 {
 					b.w("|")
 				}
-				f = in.Field()
+				f = in.in.Field()
 				sh := f.OffsetBits() + 8*int(f.Offset()-ogo)
-				b.w("(((%s)&%#0x)<<%d)", c.expr(w, in.AssignmentExpression, c.unsignedInts[gsz/8], exprDefault), uint64(1)<<f.ValueBits()-1, sh)
+				b.w("(((%s)&%#0x)<<%d)", c.expr(w, in.in.AssignmentExpression, c.unsignedInts[gsz/8], exprDefault), uint64(1)<<f.ValueBits()-1, sh)
 			}
 			b.w(", ")
 			continue
 		}
 
-		for isEmpty(v[0].Type()) {
+		for isEmpty(v[0].in.Type()) {
 			v = v[1:]
 		}
 		flds = flds[1:]
@@ -377,7 +498,7 @@ func (c *ctx) initializerStruct(w writer, n cc.Node, a []*cc.Initializer, t *cc.
 	return &b
 }
 
-func (c *ctx) initializerUnion(w writer, n cc.Node, a []*cc.Initializer, t *cc.UnionType, off0 int64, arrayElem bool) (r *buf) {
+func (c *ctx) initializerUnion(w writer, n cc.Node, a []initItem, t *cc.UnionType, off0 int64, arrayElem bool) (r *buf) {
 	var b buf
 	if c.isZeroInitializerSlice(a) {
 		b.w("%s{}", c.typ(n, t))
@@ -419,12 +540,12 @@ func (c *ctx) initializerUnion(w writer, n cc.Node, a []*cc.Initializer, t *cc.U
 	return &b
 }
 
-func (c *ctx) initializerUnionMany(w writer, n cc.Node, a []*cc.Initializer, t *cc.UnionType, off0 int64, arrayElem bool) (r *buf) {
+func (c *ctx) initializerUnionMany(w writer, n cc.Node, a []initItem, t *cc.UnionType, off0 int64, arrayElem bool) (r *buf) {
 	var b buf
 	var paths [][]*cc.Initializer
 	for _, v := range a {
 		var path []*cc.Initializer
-		for p := v.Parent(); p != nil; p = p.Parent() {
+		for p := v.in.Parent(); p != nil; p = p.Parent() {
 			path = append(path, p)
 		}
 		paths = append(paths, path)
@@ -495,24 +616,27 @@ done:
 	return &b
 }
 
-func (c *ctx) fixLCA(t *cc.UnionType, lca *cc.Initializer, a []*cc.Initializer, off0 int64) (rt cc.Type, off int64) {
+func (c *ctx) fixLCA(t *cc.UnionType, lca *cc.Initializer, a []initItem, off0 int64) (rt cc.Type, off int64) {
 	rt = lca.Type()
+	// The items may be copies shifted from the first element of a range
+	// designator, lca is shifted the same.
+	lcaOff := lca.Offset() + a[0].off - a[0].in.Offset()
 	switch {
 	case rt.Size() > t.Size():
-		return rt, lca.Offset()
+		return rt, lcaOff
 	case rt != t:
-		return rt, lca.Offset()
+		return rt, lcaOff
 	}
 
 	okField, okName := true, true
 	for _, v := range a {
-		if v.Field() == nil {
+		if v.in.Field() == nil {
 			okField = false
 			okName = false
 			break
 		}
 
-		if v.Field().Name() == "" {
+		if v.in.Field().Name() == "" {
 			okName = false
 			break
 		}
@@ -524,18 +648,18 @@ func (c *ctx) fixLCA(t *cc.UnionType, lca *cc.Initializer, a []*cc.Initializer, 
 			uf := t.FieldByIndex(i)
 		ok:
 			for _, v := range a {
-				af := v.Field()
+				af := v.in.Field()
 				fs := c.findFields(uf.Type(), af.Name(), 0)
 				if len(fs) == 0 {
 					continue nextUf
 				}
 
 				for _, f := range fs {
-					if v.Offset()-off0 != f.off {
+					if v.off-off0 != f.off {
 						continue
 					}
 
-					if v.Type().Size() != f.f.Type().Size() {
+					if v.in.Type().Size() != f.f.Type().Size() {
 						continue
 					}
 
@@ -544,7 +668,7 @@ func (c *ctx) fixLCA(t *cc.UnionType, lca *cc.Initializer, a []*cc.Initializer, 
 
 				continue nextUf
 			}
-			return uf.Type(), lca.Offset() + uf.Offset()
+			return uf.Type(), lcaOff + uf.Offset()
 		}
 	}
 
@@ -577,36 +701,36 @@ func (c *ctx) findFields(t cc.Type, fn string, off int64) (r []fld) {
 	return r
 }
 
-func (c *ctx) initializerUnionOne(w writer, n cc.Node, a []*cc.Initializer, t *cc.UnionType, off0 int64) (r *buf) {
+func (c *ctx) initializerUnionOne(w writer, n cc.Node, a []initItem, t *cc.UnionType, off0 int64) (r *buf) {
 	var b buf
 	in := a[0]
-	pre := in.Offset() - off0
+	pre := in.off - off0
 	if pre != 0 {
 		b.w("%s_ [%d]byte;", tag(preserve), pre)
 	}
 	b.w("%sf ", tag(preserve))
-	f := in.Field()
+	f := in.in.Field()
 	// Size of the emitted f. A bit field is accessed through its access unit,
 	// which can be narrower than the declared type, so the padding below must
-	// account for the emitted width, not for in.Type().Size(), or the struct
+	// account for the emitted width, not for in.in.Type().Size(), or the struct
 	// comes out shorter than the union it is reinterpreted as.
-	fsize := in.Type().Size()
+	fsize := in.in.Type().Size()
 	switch {
 	case f != nil && f.IsBitfield():
 		fsize = f.AccessBytes()
 		b.w("%suint%d", tag(preserve), fsize*8)
 	default:
-		b.w("%s ", c.typ(n, in.Type()))
+		b.w("%s ", c.typ(n, in.in.Type()))
 	}
 	if post := t.Size() - (pre + fsize); post != 0 {
 		b.w("; %s_ [%d]byte", tag(preserve), post)
 	}
 	b.w("}{%sf: ", tag(preserve))
-	switch f := in.Field(); {
+	switch f := in.in.Field(); {
 	case f != nil && f.IsBitfield():
-		b.w("(((%s)&%#0x)<<%d)", c.expr(w, in.AssignmentExpression, c.unsignedInts[f.AccessBytes()], exprDefault), uint64(1)<<f.ValueBits()-1, f.OffsetBits())
+		b.w("(((%s)&%#0x)<<%d)", c.expr(w, in.in.AssignmentExpression, c.unsignedInts[f.AccessBytes()], exprDefault), uint64(1)<<f.ValueBits()-1, f.OffsetBits())
 	default:
-		b.w("%s", c.expr(w, in.AssignmentExpression, in.Type(), exprDefault))
+		b.w("%s", c.expr(w, in.in.AssignmentExpression, in.in.Type(), exprDefault))
 	}
 	b.w("}")
 	return &b
@@ -633,7 +757,7 @@ func (c *ctx) initializerUnionOne(w writer, n cc.Node, a []*cc.Initializer, t *c
 // target reproduce the image regardless of endianness; the emitted literals
 // differ between little- and big-endian targets, as ccgo already emits
 // per-target output.
-func (c *ctx) compactUnionInit(n cc.Node, a []*cc.Initializer, t *cc.UnionType, off0 int64) *buf {
+func (c *ctx) compactUnionInit(n cc.Node, a []initItem, t *cc.UnionType, off0 int64) *buf {
 	size := t.Size()
 	al := int64(t.Align())
 	if size <= 0 || al <= 0 || al > 8 || size%al != 0 {
@@ -643,18 +767,18 @@ func (c *ctx) compactUnionInit(n cc.Node, a []*cc.Initializer, t *cc.UnionType, 
 	bo := c.ast.ABI.ByteOrder
 	img := make([]byte, size)
 	for _, in := range a {
-		if f := in.Field(); f != nil && f.IsBitfield() {
+		if f := in.in.Field(); f != nil && f.IsBitfield() {
 			return nil
 		}
 
-		ft := in.Type()
+		ft := in.in.Type()
 		fsz := ft.Size()
-		rel := in.Offset() - off0
-		if fsz <= 0 || rel < 0 || rel+fsz > size || in.AssignmentExpression == nil {
+		rel := in.off - off0
+		if fsz <= 0 || rel < 0 || rel+fsz > size || in.in.AssignmentExpression == nil {
 			return nil
 		}
 
-		if !encodeScalarConst(img[rel:rel+fsz], in.AssignmentExpression.Value(), ft, bo) {
+		if !encodeScalarConst(img[rel:rel+fsz], in.in.AssignmentExpression.Value(), ft, bo) {
 			return nil
 		}
 	}

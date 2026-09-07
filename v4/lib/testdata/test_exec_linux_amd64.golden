@@ -1642,6 +1642,7 @@ assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/strcpy-2.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/string-large-1.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/stru.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/struct-non-lval-1.c
+assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/struct-non-lval-3.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/structret.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/structs.c
 assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/compile/stuct.c

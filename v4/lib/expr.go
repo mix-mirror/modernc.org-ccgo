@@ -2417,11 +2417,8 @@ out:
 			}
 		}
 	case cc.PostfixExpressionComplit: // '(' TypeName ')' '{' InitializerList ',' '}'
-		var a []*cc.Initializer
-		for l := n.InitializerList; l != nil; l = l.InitializerList {
-			a = append(a, c.initalizerFlatten(l.Initializer, nil)...)
-		}
 		t := n.TypeName.Type()
+		a := c.initItemsList(n.InitializerList, t)
 		switch {
 		case c.f != nil && cc.IsScalarType(t) && mode == exprUintptr:
 			if c.f.compoundLiterals == nil {
@@ -2436,7 +2433,7 @@ out:
 			case 2:
 				bp = c.f.compoundLiterals[n]
 			}
-			w.w("*(*%s)(unsafe.Pointer(%s)) = %s;", c.typ(n, t), bpOff(bp), c.topExpr(w, a[0].AssignmentExpression, t, exprDefault))
+			w.w("*(*%s)(unsafe.Pointer(%s)) = %s;", c.typ(n, t), bpOff(bp), c.topExpr(w, a[0].in.AssignmentExpression, t, exprDefault))
 			b.w("(%s)", bpOff(bp))
 			return &b, t.Pointer(), mode
 		case c.f != nil && mode == exprUintptr:
@@ -3488,11 +3485,7 @@ func (c *ctx) postfixExpressionSelectComplit(w writer, n *cc.PostfixExpression, 
 	}
 
 	ct := x.TypeName.Type()
-	var a []*cc.Initializer
-	for l := x.InitializerList; l != nil; l = l.InitializerList {
-		a = append(a, c.initalizerFlatten(l.Initializer, nil)...)
-	}
-
+	a := c.initItemsList(x.InitializerList, ct)
 	switch len(a) {
 	case 0:
 		return nil, nil, 0
@@ -3501,8 +3494,8 @@ func (c *ctx) postfixExpressionSelectComplit(w writer, n *cc.PostfixExpression, 
 			return nil, nil, 0
 		}
 
-		e := a[0].AssignmentExpression
-		f := a[0].Field()
+		e := a[0].in.AssignmentExpression
+		f := a[0].in.Field()
 		var b buf
 		switch d := c.declaratorOf(e); {
 		case d != nil && d.Type() == f.Type():
@@ -3520,9 +3513,12 @@ func (c *ctx) postfixExpressionSelectComplit(w writer, n *cc.PostfixExpression, 
 
 		var commonField *cc.Field
 		for _, v := range a {
-			f := v.Field()
+			f := v.in.Field()
 			if f == nil {
-				if f = v.Parent().Field(); f == nil {
+				if p := v.in.Parent(); p != nil {
+					f = p.Field()
+				}
+				if f == nil {
 					return nil, nil, 0
 				}
 			}
@@ -5004,6 +5000,16 @@ func (c *ctx) primaryExpressionCharConst(w writer, n *cc.PrimaryExpression, t cc
 		return &b, rt, rmode
 	}
 
+	// A Go rune literal is the byte of the constant, converted from uint8. A
+	// constant with the high bit set is negative where char is signed
+	// ([0]6.4.4.4/10), '\xff' is -1, which a rune literal cannot express:
+	// use the value, of the C type of the constant, int. See issue #63.
+	from := "Uint8"
+	if !isPositive {
+		lit = fmt.Sprint(int64(want))
+		from = c.helper(n, n.Type())
+	}
+
 	switch {
 	case c.exprNestLevel == 1:
 		cv := v.Convert(t)
@@ -5024,7 +5030,7 @@ func (c *ctx) primaryExpressionCharConst(w writer, n *cc.PrimaryExpression, t cc
 
 		fallthrough
 	default:
-		b.w("(%s%s%sFromUint8(%s))", c.task.tlsQualifier, tag(preserve), c.helper(n, t), lit)
+		b.w("(%s%s%sFrom%s(%s))", c.task.tlsQualifier, tag(preserve), c.helper(n, t), from, lit)
 	}
 	return &b, rt, rmode
 }
