@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"math"
 	"math/big"
 	"strconv"
 	"strings"
@@ -4707,18 +4708,26 @@ out:
 				}
 			}
 		case *cc.Enumerator:
+			rt, rmode = t, exprDefault
+			lit := fmt.Sprint(n.Value())
+			if x.ResolvedIn().Parent == nil {
+				lit = fmt.Sprintf("%s%s", tag(enumConst), x.Token.Src())
+			}
 			switch {
-			case x.ResolvedIn().Parent == nil:
-				rt, rmode = t, exprDefault
-				switch {
-				case !cc.IsSignedInteger(t) && c.isNegative(n.Value()):
-					b.w("(%s%s%sFrom%s(%s%s))", c.task.tlsQualifier, tag(preserve), c.helper(n, t), c.helper(n, n.Type()), tag(enumConst), x.Token.Src())
-				default:
-					b.w("(%s(%s%s))", c.verifyTyp(n, t), tag(enumConst), x.Token.Src())
-				}
+			case t.Kind() == cc.Void:
+				b.w("(%s)", lit)
+			case t.Kind() == cc.Bool:
+				b.w("%s", c.exprWrap(t, "%s", lit))
+			case cc.IsIntegerType(t) && !c.constFits(n.Value(), t):
+				// The enumerator is a Go constant and a Go conversion of a
+				// constant to a type that cannot hold it does not compile,
+				// `int8(BINBYTES8)` with BINBYTES8 = 0x8e. Convert at run
+				// time, as an integer literal in the same place is.
+				//
+				// See https://gitlab.com/cznic/ccgo/-/issues/56
+				b.w("(%s%s%sFrom%s(%s))", c.task.tlsQualifier, tag(preserve), c.helper(n, t), c.helper(n, n.Type()), lit)
 			default:
-				rt, rmode = n.Type(), exprDefault
-				b.w("%v", n.Value())
+				b.w("(%s(%s))", c.verifyTyp(n, t), lit)
 			}
 		case nil:
 			switch mode {
@@ -5147,6 +5156,26 @@ func (c *ctx) macro(n *cc.PrimaryExpression) (nm, lit string) {
 	}
 
 	return "", ""
+}
+
+// constFits reports whether the integer constant v is representable in the
+// integer type t, so that a Go conversion of the constant to t compiles.
+func (c *ctx) constFits(v cc.Value, t cc.Type) bool {
+	if t.Kind() == cc.Enum {
+		t = t.(*cc.EnumType).UnderlyingType()
+	}
+	cv := v.Convert(t)
+	if cv == v {
+		return true
+	}
+
+	switch x := v.(type) {
+	case cc.Int64Value:
+		return x >= 0 && !cc.IsSignedInteger(t) && cv == cc.UInt64Value(x)
+	case cc.UInt64Value:
+		return x <= math.MaxInt64 && cc.IsSignedInteger(t) && cv == cc.Int64Value(x)
+	}
+	return false
 }
 
 func (c *ctx) primaryExpressionIntConst(w writer, n *cc.PrimaryExpression, t cc.Type, mode mode) (r *buf, rt cc.Type, rmode mode) {

@@ -449,3 +449,70 @@ int main(void) {
 		t.Fatalf("got\n%s\nexpected\n%s", g, exp)
 	}
 }
+
+// TestIssue56 verifies that an enumerator converted to an integer type that
+// cannot hold its value is converted at run time, as an integer literal in the
+// same place is, instead of by a Go constant conversion that does not compile.
+// The enumerator appears in initializers, assignments, arguments, compound
+// assignments, casts, a switch case, a function-local enum, and in contexts
+// where the value fits, which must stay plain conversions.
+//
+// See https://gitlab.com/cznic/ccgo/-/issues/56
+func TestIssue56(t *testing.T) {
+	const src = `
+#include <stdio.h>
+#include <stdbool.h>
+enum opcode { SMALL = 5, BINBYTES8 = 0x8e, NEG = -200, BIG = 70000 };
+#define K 0x8e
+static const int ci = 0x8e;
+static char arr[] = { BINBYTES8, NEG, 1 };
+struct S { char c; unsigned char u; } s = { BINBYTES8, NEG };
+static void f(char c) { printf("%d ", c); }
+int main(void) {
+	char c = BINBYTES8, l[2] = { BINBYTES8, NEG };
+	printf("%d %d %d %d %d %d %d %d\n", c, arr[0], arr[1], arr[2], s.c, s.u, l[0], l[1]);
+	c = 0; c = BINBYTES8; f(BINBYTES8); f(NEG);
+	{ short sh = BIG; unsigned char u = NEG; printf("%d %d %d\n", c, sh, u); }
+	{ char c1 = K, c2 = ci, c3 = BINBYTES8 + 1, c4 = (char)BINBYTES8, c5 = BINBYTES8 * 2; printf("%d %d %d %d %d\n", c1, c2, c3, c4, c5); }
+	{ char c = 0; c += BINBYTES8; unsigned char u = 0; u -= BINBYTES8; int i = (char)BINBYTES8; printf("%d %d %d %d\n", c, u, i, c == BINBYTES8); }
+	switch (c) { case (char)BINBYTES8: puts("hit"); break; default: puts("miss"); }
+	{ enum local { L8 = 0x8e, LN = -200 }; char c = L8; unsigned char u = LN; short sh = L8; printf("%d %d %d\n", c, u, sh); }
+	{
+		enum opcode e = BINBYTES8;
+		bool b1 = BINBYTES8, b2 = SMALL;
+		char cs = SMALL;
+		unsigned u = BINBYTES8; unsigned long ul = BIG;
+		double d = NEG; float fl = BIG;
+		long lo = NEG; unsigned short us = NEG;
+		BINBYTES8;
+		printf("%d %d %d %d %u %lu %g %g %ld %u %d\n", e, b1, b2, cs, u, ul, d, fl, lo, us, e == BINBYTES8);
+	}
+	return 0;
+}
+`
+	abi, err := cc.NewABI(goos, goarch)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// gcc 13 with -funsigned-char and with the default signed char.
+	exp := `142 142 56 1 142 56 142 56
+142 56 142 4464 56
+142 142 143 142 28
+142 114 142 1
+hit
+142 56 142
+142 1 1 5 142 70000 -200 70000 -200 65336 1`
+	if abi.SignedChar {
+		exp = `-114 -114 56 1 -114 56 -114 56
+-114 56 -114 4464 56
+-114 -114 -113 -114 28
+-114 114 -114 0
+hit
+-114 56 142
+142 1 1 5 142 70000 -200 70000 -200 65336 1`
+	}
+	if g := testHostCCvsCcgo(t, src); g != exp {
+		t.Fatalf("got\n%s\nexpected\n%s", g, exp)
+	}
+}
