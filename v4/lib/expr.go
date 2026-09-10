@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"modernc.org/cc/v4"
 	"modernc.org/mathutil"
@@ -1019,7 +1020,32 @@ func (c *ctx) discardStr2(n cc.ExpressionNode, b *buf) string {
 		return ""
 	}
 
+	if isGoIdent(s) {
+		// The value was moved into a variable before this point, as an
+		// inlined call leaves its result or a postfix increment leaves the
+		// old value. Whatever the C expression was, `v1;` is not a Go
+		// statement.
+		//
+		// See https://gitlab.com/cznic/ccgo/-/issues/53
+		return fmt.Sprintf("%s_ = %s", tag(preserve), b)
+	}
+
 	return fmt.Sprintf("%s%s", c.discardStr(n), b)
+}
+
+// isGoIdent reports whether s is a Go identifier.
+func isGoIdent(s string) bool {
+	for i, r := range s {
+		switch {
+		case r == '_', unicode.IsLetter(r):
+			// ok
+		case i > 0 && unicode.IsDigit(r):
+			// ok
+		default:
+			return false
+		}
+	}
+	return s != ""
 }
 
 func (c *ctx) strUnparen(s string) string {

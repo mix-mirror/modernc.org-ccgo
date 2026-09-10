@@ -383,3 +383,69 @@ int main(void) {
 		t.Fatalf("got\n%s\nexpected\n%s", g, exp)
 	}
 }
+
+// TestIssue53 verifies that a discarded value which has already been moved into
+// a variable is consumed with an assignment: the result of an inlined call
+// passed to a parameter the inlined body never reads, and likewise a postfix
+// increment or an assignment expression in that position.
+//
+// See https://gitlab.com/cznic/ccgo/-/issues/53
+func TestIssue53(t *testing.T) {
+	const hdr = `
+#include <stdlib.h>
+struct type { long basicsize; };
+struct obj { struct type *ob_type; long size; };
+static int g_calls;
+static int g(void) { g_calls++; return 7; }
+static inline struct type *get_type(struct obj *o) { return o->ob_type; }
+static inline void *realloc_with_type(struct type *tp, void *ptr, size_t size) {
+#ifdef FREE_THREADED
+	if (tp->basicsize < 0) return NULL;
+#endif
+	void *mem = realloc(ptr, size);
+	return mem;
+}
+static inline int unused(int x) { return 1; }
+static inline int unused2(int x, int y) { return y; }
+static inline void unused_void(int x) { }
+static inline int inl(int v) { return v * 2; }
+static inline int assigned_only(int x) { x = 5; return 3; }
+static inline int nested(int v) { return unused(inl(v)) + unused2(inl(v), inl(v + 1)); }
+`
+	const src = `
+#include <stdio.h>
+#include "un.h"
+struct obj *resize(struct obj *op, long n) {
+	char *mem = (char *)op;
+	mem = (char *)realloc_with_type(get_type(op), mem, sizeof(struct obj) + (size_t)n);
+	if (mem == NULL) return NULL;
+	op = (struct obj *)mem;
+	op->size = n;
+	return op;
+}
+int main(void) {
+	static struct type t = { 16 };
+	struct obj *o = calloc(1, sizeof *o);
+	int x = 1, a = 0, r1, r2, r3, r4, r5, r6, r7;
+	o->ob_type = &t;
+	o = resize(o, 3);
+	printf("%ld\n", o->size);
+	r1 = unused(x++); r2 = unused(a = 5); r3 = unused(g());
+	printf("%d %d %d %d %d\n", r1, x, r2, a, r3);
+	r4 = unused(inl(4)); r5 = unused(x); r6 = unused(3); r7 = unused2(inl(1), inl(2));
+	printf("%d %d %d %d %d\n", r4, r5, r6, r7, g_calls);
+	unused_void(inl(1)); unused_void(x++); unused_void(g());
+	inl(9); (inl(1), inl(2)); unused(inl(1));
+	r1 = assigned_only(inl(1)); r2 = nested(2);
+	printf("%d %d %d %d\n", x, r1, r2, g_calls);
+	return 0;
+}
+`
+	const exp = `3
+1 2 1 5 1
+1 1 1 4 1
+3 3 7 2`
+	if g := testHostCCvsCcgoFiles(t, map[string]string{"test.c": src, "un.h": hdr}); g != exp {
+		t.Fatalf("got\n%s\nexpected\n%s", g, exp)
+	}
+}
