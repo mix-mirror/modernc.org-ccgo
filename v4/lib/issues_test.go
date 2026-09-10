@@ -329,3 +329,57 @@ int main(void) {
 		t.Fatalf("got\n%s\nexpected\n%s", g, exp)
 	}
 }
+
+// TestIssue52 verifies that a call through a function pointer parameter of an
+// inlined function is emitted as a call through the pointer, whatever the
+// argument was: a struct field, a function designator, a value held in a
+// variable, a pointer forwarded from an enclosing inlined call, or a parameter
+// declared with function type, and that a parameter overwritten through its
+// address is called through the frame slot.
+//
+// See https://gitlab.com/cznic/ccgo/-/issues/52
+func TestIssue52(t *testing.T) {
+	const hdr = `
+typedef void (*freefunc)(void *);
+typedef int (*binop)(int, int);
+static int calls;
+static void do_free(void *p) { (void)p; calls++; }
+static int add(int a, int b) { return a + b; }
+static int mul(int a, int b) { return a * b; }
+static inline void call1(void *obj, freefunc f) { f(obj); }
+static inline void call2(void *obj, freefunc f) { f(obj); f(obj); }
+static inline int apply(binop op, int a, int b) { return op(a, b); }
+static inline int apply2(binop op, int a, int b) { return op(a, b) + op(b, a); }
+static inline int deref_call(binop op, int a, int b) { return (*op)(a, b); }
+static inline int fwd(binop op, int a, int b) { return apply(op, a, b) * 2; }
+static inline int ftype_param(int op(int, int), int a, int b) { return op(a, b); }
+static inline int pinned_fp(binop op, int a, int b) { binop *pp = &op; return (*pp)(a, b); }
+static inline int cond_call(binop op, int a, int b) { return op ? op(a, b) : -1; }
+static inline int null_check(binop op) { return op == 0; }
+static void set(binop *p) { *p = mul; }
+static inline int repoint(binop op, int a, int b) { binop *pp = &op; *pp = mul; return op(a, b); }
+static inline int repoint2(binop op, int a, int b) { set(&op); return op(a, b) + op(a, a); }
+`
+	const src = `
+#include <stdio.h>
+#include "cb.h"
+struct type { const char *name; freefunc tp_free; binop op; };
+static struct type T = { "T", do_free, add };
+int main(void) {
+	int x; struct type *t = &T;
+	call1(&x, t->tp_free); call1(&x, do_free); call2(&x, t->tp_free);
+	printf("%d\n", calls);
+	printf("%d %d %d %d\n", apply(t->op, 2, 3), apply(mul, 2, 3), apply2(t->op, 2, 3), deref_call(mul, 4, 5));
+	printf("%d %d %d %d %d\n", fwd(add, 1, 2), ftype_param(mul, 3, 3), pinned_fp(add, 5, 6), cond_call(add, 1, 1), cond_call(0, 1, 1));
+	printf("%d %d %d %d\n", null_check(0), null_check(add), repoint(add, 3, 4), repoint2(add, 3, 4));
+	return 0;
+}
+`
+	const exp = `4
+5 6 10 20
+6 9 11 2 -1
+1 0 12 21`
+	if g := testHostCCvsCcgoFiles(t, map[string]string{"test.c": src, "cb.h": hdr}); g != exp {
+		t.Fatalf("got\n%s\nexpected\n%s", g, exp)
+	}
+}

@@ -4451,6 +4451,17 @@ func (c *ctx) expressionList(w writer, n *cc.ExpressionList, t cc.Type, mode mod
 	return r, rt, rmode
 }
 
+// isPointerToFunction reports whether t is a pointer to a function type.
+func isPointerToFunction(t cc.Type) bool {
+	pt, ok := t.(*cc.PointerType)
+	if !ok {
+		return false
+	}
+
+	_, ok = pt.Elem().(*cc.FunctionType)
+	return ok
+}
+
 func (c *ctx) primaryExpression(w writer, n *cc.PrimaryExpression, t cc.Type, mode mode) (r *buf, rt cc.Type, rmode mode) {
 	isVolatileOrAtomicExpr := c.isVolatileOrAtomicExpr(n)
 	if isVolatileOrAtomicExpr {
@@ -4507,6 +4518,22 @@ out:
 							//
 							// See https://gitlab.com/cznic/ccgo/-/issues/48
 							break inlineParams
+						case mode == exprCall && isPointerToFunction(v.Type()):
+							// A call through a function pointer parameter: hand
+							// the replacement over as the pointer it is so that
+							// convertMode wraps it into a callable, as for any
+							// other function pointer value. Splicing it in as
+							// the callee produced `t.Ffree(tls, x)` on a
+							// uintptr field or `v1(tls, x)` on a uintptr
+							// variable.
+							//
+							// A pinned parameter is handled above: its
+							// replacement is stale once the pointer is written
+							// through the address.
+							//
+							// See https://gitlab.com/cznic/ccgo/-/issues/52
+							b.w("(%s)", nfo.replacedParams[i])
+							return &b, v.Type(), exprUintptr
 						default:
 							b.w("(%s)", nfo.replacedParams[i])
 						}
