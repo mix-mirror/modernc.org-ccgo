@@ -20,11 +20,21 @@ import (
 // output.
 func testHostCCvsCcgo(t *testing.T, src string) string {
 	t.Helper()
+	return testHostCCvsCcgoFiles(t, map[string]string{"test.c": src})
+}
+
+// testHostCCvsCcgoFiles is testHostCCvsCcgo for a program spread over several
+// files. The program is files["test.c"]; the other entries are written next to
+// it under their names so that it can include them.
+func testHostCCvsCcgoFiles(t *testing.T, files map[string]string) string {
+	t.Helper()
 	dir := t.TempDir()
-	cFile := filepath.Join(dir, "test.c")
-	if err := os.WriteFile(cFile, []byte(src), 0644); err != nil {
-		t.Fatal(err)
+	for nm, src := range files {
+		if err := os.WriteFile(filepath.Join(dir, nm), []byte(src), 0644); err != nil {
+			t.Fatal(err)
+		}
 	}
+	cFile := filepath.Join(dir, "test.c")
 
 	bin := filepath.Join(dir, enforceBinaryExt("cbin"))
 	if out, err := exec.Command(hostCC, "-o", bin, "-w", cFile, "-lm", "-lpthread").CombinedOutput(); err != nil {
@@ -263,6 +273,59 @@ int main(void) {
 	const exp = `axc 0 | abcd 0 | abc | abc 113 0 1 | axc 0 | 0 120 0 | a | axc dey
 97 120 99 0 | axc | axc | axc`
 	if g := testHostCCvsCcgo(t, src); g != exp {
+		t.Fatalf("got\n%s\nexpected\n%s", g, exp)
+	}
+}
+
+// TestIssue48 verifies that a parameter of an inlined function whose address is
+// taken, explicitly or through a union member, is read and assigned as the
+// frame slot the inline site spilled it to, so that a write through the address
+// is seen by a later whole-value read and a whole-value assignment is seen by a
+// later member read.
+//
+// See https://gitlab.com/cznic/ccgo/-/issues/48
+func TestIssue48(t *testing.T) {
+	const hdr = `
+typedef union { unsigned long bits; } Ref;
+typedef struct { int x, y; } Pt;
+static void bump(int *p) { *p += 100; }
+static inline Ref broken(Ref ref) { ref.bits &= ~1UL; return ref; }
+static inline Ref fixed(Ref ref) { Ref result = { .bits = ref.bits & ~1UL }; return result; }
+static inline int addr_scalar(int x) { bump(&x); return x; }
+static inline int addr_cond(int x) { int *p = &x; *p += 1; if (x > 5) return x; return -x; }
+static inline unsigned long assign_whole(Ref ref, Ref other) { ref.bits += 1; ref = other; ref.bits += 2; return ref.bits; }
+static inline Ref nested(Ref ref) { ref.bits |= 8; return broken(ref); }
+static inline Pt viaptr(Pt p) { Pt *q = &p; q->y = 77; return p; }
+static inline int loop(int n) { int *p = &n; while (*p > 0) { (*p)--; } return n; }
+static inline void noread(int x) { bump(&x); }
+static inline int arrp(int a[]) { int **pp = &a; (*pp)++; return a[0]; }
+static inline long swap2(long a, long b) { long *pa = &a, *pb = &b; long t = *pa; *pa = *pb; *pb = t; return a * 100 + b; }
+`
+	const src = `
+#include <stdio.h>
+#include "ref.h"
+static inline __attribute__((always_inline)) int ai(int x) { bump(&x); return x; }
+int main(void) {
+	Ref r = { .bits = 3 }, o = { .bits = 40 };
+	Pt p = { 1, 2 };
+	int a[2] = { 5, 6 };
+	printf("%lu %lu %lu\n", broken(r).bits, fixed(r).bits, broken(r).bits);
+	printf("%d %d %d %d\n", addr_scalar(1), addr_cond(1), addr_cond(9), ai(7));
+	printf("%lu %lu\n", assign_whole(r, o), nested(r).bits);
+	printf("%d %d\n", viaptr(p).x, viaptr(p).y);
+	printf("%d %d %ld\n", loop(5), arrp(a), swap2(4, 5));
+	noread(1);
+	printf("%d %d %d\n", r.bits == 3, p.y == 2, a[0] == 5);
+	return 0;
+}
+`
+	const exp = `2 2 2
+101 -2 10 107
+42 10
+1 77
+0 6 504
+1 1 1`
+	if g := testHostCCvsCcgoFiles(t, map[string]string{"test.c": src, "ref.h": hdr}); g != exp {
 		t.Fatalf("got\n%s\nexpected\n%s", g, exp)
 	}
 }

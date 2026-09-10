@@ -4480,21 +4480,37 @@ out:
 					return &b, rt, exprDefault
 				}
 
+			inlineParams:
 				for nfo := c.f.inlineInfo; nfo != nil; nfo = nfo.parent {
 					for i, v := range nfo.params {
-						if v.Declarator == x {
-							switch {
-							case mode == exprVoid:
-								w.w("%s_ = %s;", tag(preserve), nfo.replacedParams[i])
-							case mode == exprUintptr:
-								c.f.declInfos.takeAddress(x)
-								b.w("(%s)", bpOff(c.f.declInfos.info(x).bpOff))
-								return &b, v.Type().Pointer(), exprUintptr
-							default:
-								b.w("(%s)", nfo.replacedParams[i])
-							}
-							return &b, v.Type(), exprDefault
+						if v.Declarator != x {
+							continue
 						}
+
+						switch {
+						case mode == exprVoid:
+							w.w("%s_ = %s;", tag(preserve), nfo.replacedParams[i])
+						case mode == exprUintptr:
+							c.f.declInfos.takeAddress(x)
+							b.w("(%s)", bpOff(c.f.declInfos.info(x).bpOff))
+							return &b, v.Type().Pointer(), exprUintptr
+						case c.f.declInfos.info(x).pinned():
+							// The parameter's address was taken, so the inline
+							// site spilled it to the caller's frame and every
+							// write through that address lands there. The
+							// replacement holds the argument as passed and is
+							// stale from then on: a whole-value read returned
+							// the original argument after a member or pointer
+							// write and a whole-value assignment never reached
+							// the frame. Use the frame slot for every access,
+							// like any other pinned local.
+							//
+							// See https://gitlab.com/cznic/ccgo/-/issues/48
+							break inlineParams
+						default:
+							b.w("(%s)", nfo.replacedParams[i])
+						}
+						return &b, v.Type(), exprDefault
 					}
 				}
 			}
