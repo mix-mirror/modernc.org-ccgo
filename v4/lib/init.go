@@ -723,13 +723,20 @@ func (c *ctx) fixLCA(t *cc.UnionType, lca *cc.Initializer, a []initItem, off0 in
 	// The items may be copies shifted from the first element of a range
 	// designator, lca is shifted the same.
 	lcaOff := lca.Offset() + a[0].off - a[0].in.Offset()
-	switch {
-	case rt.Size() > t.Size():
-		return rt, lcaOff
-	case rt != t:
+	if rt != t && lcaOff >= off0 && lcaOff+rt.Size() <= off0+t.Size() {
+		// The common ancestor lies within the union: it is the active member
+		// or a part of it.
 		return rt, lcaOff
 	}
 
+	// The common ancestor is the union itself, or an aggregate enclosing it
+	// when the items designate into the union without braces of their own, as
+	// in `{ .v.Name.id = p, .v.Name.ctx = 7 }`. Handing the enclosing
+	// aggregate back as the active member laid the union out as that
+	// aggregate, with negative padding or without end. Find the member the
+	// items designate into instead.
+	//
+	// See https://gitlab.com/cznic/ccgo/-/issues/54
 	okField, okName := true, true
 	for _, v := range a {
 		if v.in.Field() == nil {
@@ -770,12 +777,12 @@ func (c *ctx) fixLCA(t *cc.UnionType, lca *cc.Initializer, a []initItem, off0 in
 
 				continue nextUf
 			}
-			return uf.Type(), lcaOff + uf.Offset()
+			return uf.Type(), off0 + uf.Offset()
 		}
 	}
 
 	f := t.FieldByIndex(0)
-	return f.Type(), f.Offset()
+	return f.Type(), off0 + f.Offset()
 }
 
 type fld struct {

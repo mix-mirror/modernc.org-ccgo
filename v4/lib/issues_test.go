@@ -646,3 +646,60 @@ int main(void) {
 		t.Fatalf("got\n%s\nexpected\n%s", g, exp)
 	}
 }
+
+// TestIssue54 verifies that designators reaching into a union member of a
+// struct without braces of their own, `.v.Name.id = p, .v.Name.ctx = 7`, lay
+// the union out as that member when one of the values is an address: a
+// pointer and a scalar, three members, a union first in the struct, a union
+// in an array element, a union nested in a union, an array of pointers, the
+// scalar before the pointer, and an automatic variable.
+//
+// See https://gitlab.com/cznic/ccgo/-/issues/54
+func TestIssue54(t *testing.T) {
+	const src = `
+#include <stdio.h>
+static const char empty[] = "";
+static int g = 42;
+struct expr { int kind; union { struct { const char *id; int ctx; } Name; struct { double value; } Constant; } v; int lineno; };
+static struct expr d1 = { .kind = 1, .v.Name.id = empty, .v.Name.ctx = 7, .lineno = 1 };
+struct S { long a; union { struct { const char *p; int c; } N; double d; } u; long b; };
+static struct S s1 = { .a = 1, .u.N.p = empty, .u.N.c = 7, .b = 3 };
+struct U0 { union { struct { const char *p; int c; } N; long l; } u; int after; };
+static struct U0 u0 = { .u.N.p = empty, .u.N.c = 5, .after = 9 };
+struct Three { int k; union { struct { const char *p; int c; short s; } N; double d; } u; };
+static struct Three t3 = { .k = 2, .u.N.p = empty, .u.N.c = 3, .u.N.s = 4 };
+struct Arr { int k; struct S arr[2]; };
+static struct Arr ar = { .k = 1, .arr[1].u.N.p = empty, .arr[1].u.N.c = 8, .arr[0].a = 5 };
+struct Nest { int k; union { union { struct { void *p; int c; } in; long l; } inner; double d; } u; };
+static struct Nest ne = { .k = 1, .u.inner.in.p = &g, .u.inner.in.c = 6 };
+struct PArr { int k; union { struct { void *ps[2]; } A; double d; } u; };
+static struct PArr pa = { .k = 1, .u.A.ps[0] = &g, .u.A.ps[1] = empty };
+struct Mixed { int k; union { struct { int c; const char *p; } N; double d; } u; };
+static struct Mixed mx = { .k = 1, .u.N.c = 5, .u.N.p = empty };
+int main(void) {
+	struct expr l1 = { .kind = 1, .v.Name.id = empty, .v.Name.ctx = 7, .lineno = 1 };
+	printf("%d %d %d %d\n", d1.kind, d1.v.Name.id == empty, d1.v.Name.ctx, d1.lineno);
+	printf("%ld %d %d %ld\n", s1.a, s1.u.N.p == empty, s1.u.N.c, s1.b);
+	printf("%d %d %d\n", u0.u.N.p == empty, u0.u.N.c, u0.after);
+	printf("%d %d %d %d\n", t3.k, t3.u.N.p == empty, t3.u.N.c, t3.u.N.s);
+	printf("%d %ld %d %d %ld\n", ar.k, ar.arr[0].a, ar.arr[1].u.N.p == empty, ar.arr[1].u.N.c, ar.arr[1].a);
+	printf("%d %d %d\n", ne.k, ne.u.inner.in.p == &g, ne.u.inner.in.c);
+	printf("%d %d %d\n", pa.k, pa.u.A.ps[0] == &g, pa.u.A.ps[1] == empty);
+	printf("%d %d %d\n", mx.k, mx.u.N.c, mx.u.N.p == empty);
+	printf("%d %d %d %d\n", l1.kind, l1.v.Name.id == empty, l1.v.Name.ctx, l1.lineno);
+	return 0;
+}
+`
+	const exp = `1 1 7 1
+1 1 7 3
+1 5 9
+2 1 3 4
+1 5 1 8 0
+1 1 6
+1 1 1
+1 5 1
+1 1 7 1`
+	if g := testHostCCvsCcgo(t, src); g != exp {
+		t.Fatalf("got\n%s\nexpected\n%s", g, exp)
+	}
+}
