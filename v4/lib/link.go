@@ -823,6 +823,26 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 
 				lib, ok := l.externs[nm]
 				if !ok {
+					if r := l.rawName(nm); strings.HasPrefix(r, "__builtin_") {
+						// The compiler calls the libm functions gcc treats as
+						// builtins under their __builtin_ names. When no library
+						// provides such a name but one provides the plain name,
+						// libc has Xnextafter but no X__builtin_nextafter, use
+						// the plain one, instead of emitting a reference to a
+						// libc builtin that does not exist.
+						//
+						// See https://gitlab.com/cznic/ccgo/-/issues/62
+						if plain := tag(external) + r[len("__builtin_"):]; l.externs[plain] != nil {
+							lib, ok = l.externs[plain], true
+							l.externs[nm] = lib
+							l.aliases[nm] = plain
+							if l.task.prefixExternal != "X" {
+								l.forceExternalPrefix.add(plain)
+							}
+						}
+					}
+				}
+				if !ok {
 					// trc("%q %v: %q", object.id, pos, nm)
 					switch r := l.rawName(nm); {
 					case strings.HasPrefix(r, "__builtin_"):

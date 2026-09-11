@@ -614,3 +614,35 @@ int main(void) {
 		t.Fatalf("got\n%s\nexpected\n%s", g, exp)
 	}
 }
+
+// TestIssue62 verifies that the libm functions the compiler calls under their
+// __builtin_ names link to the plain libc functions when libc provides no
+// builtin of that name. The transcendental results are printed with ten
+// significant digits because libc's implementations may differ from the host
+// libm in the last digit.
+//
+// See https://gitlab.com/cznic/ccgo/-/issues/62
+func TestIssue62(t *testing.T) {
+	const src = `
+#include <stdio.h>
+#include <math.h>
+int main(void) {
+	double x = 1.0, y = 3.0;
+	int q = 0;
+	printf("%.17g %.17g %.17g %.17g\n", nextafter(x, 2.0), nexttoward(x, 2.0L), (double)nextafterf(1.0f, 2.0f), fma(x, 2.0, 3.0));
+	printf("%.10g %.10g %.10g %.10g %.10g\n", asinh(x), log1p(x), acosh(2.0), atanh(0.5), erf(0.5));
+	printf("%.10g %.10g %.10g %.10g %.10g\n", erfc(0.5), expm1(0.5), lgamma(4.5), (double)asinhf(1.0f), (double)log1pf(1.0f));
+	printf("%.17g %.17g %.17g %.17g %.17g %.17g\n", cbrt(27.0), exp2(3.0), fdim(5.0, 2.0), logb(1024.0), remainder(10.0, y), remquo(10.0, y, &q));
+	printf("%.17g %.17g %.17g %d %.17g %.17g\n", rint(2.5), scalbn(1.5, 4), tgamma(5.0), q, hypot(3.0, 4.0), copysign(1.0, -2.0));
+	return 0;
+}
+`
+	const exp = `1.0000000000000002 1.0000000000000002 1.0000001192092896 5
+0.881373587 0.6931471806 1.316957897 0.5493061443 0.5204998778
+0.4795001222 0.6487212707 2.453736571 0.8813735843 0.6931471825
+3 8 3 10 1 1
+2 24 24 3 5 -1`
+	if g := testHostCCvsCcgo(t, src); g != exp {
+		t.Fatalf("got\n%s\nexpected\n%s", g, exp)
+	}
+}
