@@ -564,3 +564,53 @@ wxyz 5 hello axc abc`
 		t.Fatalf("got\n%s\nexpected\n%s", g, exp)
 	}
 }
+
+// TestIssue57 verifies that a tagged enum declared inside a struct or union
+// nested in another aggregate is defined at package level when a function
+// refers to it by name: through a tagged nested struct, an anonymous nested
+// struct, a struct inside a union, an array field, a union field, a typedef'd
+// struct and an anonymous struct behind a pointer, as a variable, parameter and
+// file-scope variable type.
+//
+// See https://gitlab.com/cznic/ccgo/-/issues/57
+func TestIssue57(t *testing.T) {
+	const src = `
+#include <stdio.h>
+struct result { int kind; struct error { enum error_kind { E_A = 0, E_B = 1 } kind; void *exc; } err; };
+struct anon { int kind; struct { enum anon_kind { A_A = 5, A_B } kind; } err; };
+union u { struct s { enum deep { D_A = 7 } kind; } s; int i; };
+struct arr { struct { enum ak { K1 = 2, K2 } k; } a[2]; };
+struct un { union { enum uk { U1 = 4 } k; int i; } u; };
+typedef struct { struct { enum tk { T1 = 8 } k; } in; } T;
+struct ptr { struct { enum pk { P1 = 6 } k; } *p; };
+static enum error_kind g = E_B;
+static int f(enum error_kind k) { return k + 10; }
+int main(void) {
+	struct result r = { .kind = 1, .err = { .kind = E_B, .exc = 0 } };
+	enum error_kind k = r.err.kind;
+	struct error e = { E_A, 0 };
+	struct anon an = { 1, { A_B } };
+	enum anon_kind ak = an.err.kind;
+	union u x = { .s = { D_A } };
+	enum deep d = x.s.kind;
+	struct arr ar = { { { K2 }, { K1 } } };
+	enum ak av = ar.a[0].k;
+	struct un sn = { .u.k = U1 };
+	enum uk uv = sn.u.k;
+	T t = { { T1 } };
+	enum tk tv = t.in.k;
+	enum pk pv = P1;
+	struct ptr p = { 0 };
+	printf("%d %d %d %d %d\n", r.kind, k, e.kind, g, f(E_B));
+	printf("%d %d %d %d %d %d %d %d\n", ak, A_A, d, av, ar.a[1].k, uv, tv, pv);
+	printf("%d %d\n", p.p == 0, (int)sizeof(struct error) > 0);
+	return 0;
+}
+`
+	const exp = `1 1 0 1 11
+6 5 7 3 2 4 8 6
+1 1`
+	if g := testHostCCvsCcgo(t, src); g != exp {
+		t.Fatalf("got\n%s\nexpected\n%s", g, exp)
+	}
+}

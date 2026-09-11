@@ -167,6 +167,7 @@ func (c *ctx) typ0(b *strings.Builder, n cc.Node, t cc.Type, useTypenames, useTa
 		switch nm := nmTag.SrcStr(); {
 		case nm != "" && x.LexicalScope().Parent == nil && useTags:
 			fmt.Fprintf(b, "%s%s", tag(taggedEum), nm)
+			c.defineTaggedEnums[nm] = x
 		default:
 			c.typ0(b, n, x.UnderlyingType(), false, false, false)
 		}
@@ -639,6 +640,19 @@ func (c *ctx) defineEnumType(w writer, sepStr string, n cc.Node, t *cc.EnumType)
 
 	nmt := t.Tag()
 	if nm := nmt.SrcStr(); nm != "" && t.LexicalScope().Parent == nil {
+		if c.pass != 0 {
+			// Inside a function body the definition would be local to the
+			// function and, in pass 1, discarded, while marking the tag as
+			// defined and so leaving the type undefined at package level
+			// ("undefined type teerror_kind" when loading the object).
+			// Define it at the end of the translation unit instead, like a
+			// tagged struct, see compile.
+			//
+			// See https://gitlab.com/cznic/ccgo/-/issues/57
+			c.defineTaggedEnums[nm] = t
+			return
+		}
+
 		if !c.taggedEnums.add(nm) {
 			return
 		}

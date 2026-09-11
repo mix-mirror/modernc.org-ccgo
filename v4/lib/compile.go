@@ -242,6 +242,7 @@ type ctx struct {
 	compoundStmtValue    string
 	continueCtx          string
 	declBeingInitialized *cc.Declarator
+	defineTaggedEnums    map[string]*cc.EnumType
 	defineTaggedStructs  map[string]*cc.StructType
 	defineTaggedUnions   map[string]*cc.UnionType
 	eh                   errHandler
@@ -294,6 +295,7 @@ func newCtx(task *Task, eh errHandler) *ctx {
 	return &ctx{
 		anonTypes:           map[cc.Type]string{},
 		cfg:                 task.cfg,
+		defineTaggedEnums:   map[string]*cc.EnumType{},
 		defineTaggedStructs: map[string]*cc.StructType{},
 		defineTaggedUnions:  map[string]*cc.UnionType{},
 		eh:                  eh,
@@ -506,6 +508,21 @@ func (c *ctx) compile(ifn, ofn string) (err error) {
 			t := c.defineTaggedUnions[k]
 			c.defineUnionType(c, "\n\n", nil, t)
 			delete(c.defineTaggedUnions, k)
+		}
+	}
+	// Defining the structs and unions above may have referred to tagged
+	// enums nested in them, and function bodies refer to tagged enums they
+	// cannot define; define those now, see defineEnumType.
+	for len(c.defineTaggedEnums) != 0 {
+		var a []string
+		for k := range c.defineTaggedEnums {
+			a = append(a, k)
+		}
+		sort.Strings(a)
+		for _, k := range a {
+			t := c.defineTaggedEnums[k]
+			c.defineEnumType(c, "\n\n", nil, t)
+			delete(c.defineTaggedEnums, k)
 		}
 	}
 	c.verifyTypes()
