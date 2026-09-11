@@ -4741,6 +4741,7 @@ assets/github.com/vnmakarov/mir/c-tests/lacc/initialize-array.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/initialize-float.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/initialize-null.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/initialize-object.c
+assets/github.com/vnmakarov/mir/c-tests/lacc/initialize-string.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/initialize-union.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/initialize.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/integer-suffix.c

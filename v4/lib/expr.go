@@ -792,7 +792,10 @@ func (c *ctx) logicalOrExpression(w writer, n *cc.LogicalOrExpression, t cc.Type
 	return &b, c.ast.Int, rmode
 }
 
-func (c *ctx) unparen(n cc.ExpressionNode) cc.ExpressionNode {
+func (c *ctx) unparen(n cc.ExpressionNode) cc.ExpressionNode { return unparen(n) }
+
+// unparen returns n without enclosing parentheses.
+func unparen(n cc.ExpressionNode) cc.ExpressionNode {
 	for {
 		switch x := n.(type) {
 		case *cc.ExpressionList:

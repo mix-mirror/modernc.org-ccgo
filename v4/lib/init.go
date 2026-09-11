@@ -38,6 +38,50 @@ type initItem struct {
 	off int64
 }
 
+// initLiteral returns the string literal that initializes in, looking through
+// parentheses, or nil. gcc and clang accept `char s[6] = ("hello");`. The
+// initializer keeps the array type in that case but its value is unknown to cc
+// and its expression is the parenthesized one, so the characters and the
+// expression to render have to come from the literal itself.
+//
+// See https://gitlab.com/cznic/ccgo/-/issues/55
+func initLiteral(in *cc.Initializer) *cc.PrimaryExpression {
+	if in == nil || in.AssignmentExpression == nil {
+		return nil
+	}
+
+	x, ok := unparen(in.AssignmentExpression).(*cc.PrimaryExpression)
+	if !ok {
+		return nil
+	}
+
+	switch x.Case {
+	case cc.PrimaryExpressionString, cc.PrimaryExpressionLString:
+		return x
+	}
+	return nil
+}
+
+// initValue returns the value of the expression initializing in, the string of
+// a parenthesized string literal included, see initLiteral.
+func initValue(in *cc.Initializer) cc.Value {
+	if lit := initLiteral(in); lit != nil {
+		return lit.Value()
+	}
+
+	return in.Value()
+}
+
+// initExpr returns the expression initializing in, the string literal itself
+// when it is parenthesized, see initLiteral.
+func initExpr(in *cc.Initializer) cc.ExpressionNode {
+	if lit := initLiteral(in); lit != nil {
+		return lit
+	}
+
+	return in.AssignmentExpression
+}
+
 func (c *ctx) initializerOuter(w writer, n *cc.Initializer, t cc.Type) (r *buf) {
 	return c.initializer(w, n, c.initItems(n, t), t, 0, false)
 }
@@ -278,8 +322,8 @@ func (c *ctx) initializer(w writer, n cc.Node, a []initItem, t cc.Type, off0 int
 
 	switch x := t.(type) {
 	case *cc.ArrayType:
-		if len(a) == 1 && a[0].in.Type().Kind() == cc.Array && a[0].in.Value() != cc.Unknown {
-			return c.expr(w, a[0].in.AssignmentExpression, t, exprDefault)
+		if len(a) == 1 && a[0].in.Type().Kind() == cc.Array && initValue(a[0].in) != cc.Unknown {
+			return c.expr(w, initExpr(a[0].in), t, exprDefault)
 		}
 
 		return c.initializerArray(w, n, a, x, off0)
@@ -383,7 +427,7 @@ func (c *ctx) initializerArray(w writer, n cc.Node, a []initItem, t *cc.ArrayTyp
 	var chars []string
 	for i, v := range a {
 		if v.off == off0 && v.in.Type().Kind() == cc.Array && v.in.Type().Size() == t.Size() {
-			if chars = c.stringChars(v.in.Value(), t); chars != nil {
+			if chars = c.stringChars(initValue(v.in), t); chars != nil {
 				a = append(a[:i:i], a[i+1:]...)
 				break
 			}
@@ -788,7 +832,7 @@ func (c *ctx) initializerUnionOne(w writer, n cc.Node, a []initItem, t *cc.Union
 	case f != nil && f.IsBitfield():
 		b.w("(((%s)&%#0x)<<%d)", c.expr(w, in.in.AssignmentExpression, c.unsignedInts[f.AccessBytes()], exprDefault), uint64(1)<<f.ValueBits()-1, f.OffsetBits())
 	default:
-		b.w("%s", c.expr(w, in.in.AssignmentExpression, in.in.Type(), exprDefault))
+		b.w("%s", c.expr(w, initExpr(in.in), in.in.Type(), exprDefault))
 	}
 	b.w("}")
 	return &b

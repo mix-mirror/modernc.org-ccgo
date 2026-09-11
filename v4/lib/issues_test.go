@@ -516,3 +516,51 @@ hit
 		t.Fatalf("got\n%s\nexpected\n%s", g, exp)
 	}
 }
+
+// TestIssue55 verifies that a parenthesized string literal initializes a
+// character array like the bare literal does: a struct member, a plain array,
+// doubly parenthesized, a wide string, an array without room for the NUL, a
+// union member, elements of a two-dimensional array, a literal later overridden
+// by a designated element, static and automatic storage, and a nested struct.
+//
+// See https://gitlab.com/cznic/ccgo/-/issues/55
+func TestIssue55(t *testing.T) {
+	const src = `
+#include <stdio.h>
+#include <stdint.h>
+#include <wchar.h>
+struct S { int len; uint8_t data[6]; };
+#define INIT(LITERAL) { .len = sizeof(LITERAL) - 1, .data = (LITERAL) }
+static struct S s = INIT("hello");
+static char a[6] = ("hello");
+static char a2[6] = (("hello"));
+static wchar_t w[6] = (L"hello");
+static char *p = ("hello");
+static char e[5] = ("hello");
+static union U { char s[6]; int i; } u = { .s = ("hello") };
+static char two[2][6] = { ("hello"), ("world") };
+static struct O { char s[4]; int n; } o = { .s = ("abc"), .s[1] = 'x' };
+static char big[10] = ("hi");
+static char plain[6] = "hello";
+static struct O po = { .s = "abc", .s[1] = 'x' };
+struct N { int k; struct S in; } n = { 1, INIT("abcde") };
+int main(void) {
+	char l[6] = ("hello");
+	struct S ls = INIT("local");
+	union U lu = { .s = ("wxyz") };
+	printf("%d %s %zu\n", s.len, (char *)s.data, sizeof s);
+	printf("%s %s %d %d %s %.5s %s %s %s\n", a, a2, (int)w[1], (int)w[5], p, e, u.s, two[0], two[1]);
+	printf("%s %d %s %d %d %s %d %s %s\n", o.s, o.n, big, big[2], big[9], n.in.data, n.in.len, l, ls.data);
+	char lp[4] = "abc";
+	printf("%s %d %s %s %s\n", lu.s, ls.len, plain, po.s, lp);
+	return 0;
+}
+`
+	const exp = `5 hello 12
+hello hello 101 0 hello hello hello hello world
+axc 0 hi 0 0 abcde 5 hello local
+wxyz 5 hello axc abc`
+	if g := testHostCCvsCcgo(t, src); g != exp {
+		t.Fatalf("got\n%s\nexpected\n%s", g, exp)
+	}
+}
