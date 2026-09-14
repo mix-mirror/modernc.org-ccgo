@@ -10,8 +10,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"golang.org/x/mod/semver"
 	"modernc.org/cc/v4"
 )
 
@@ -623,6 +625,16 @@ int main(void) {
 //
 // See https://gitlab.com/cznic/ccgo/-/issues/62
 func TestIssue62(t *testing.T) {
+	// Only the musl based linux ports of libc v1.75.7 and older implement
+	// nextafter, fma, erf, tgamma and several more of the functions below.
+	// The other ports have them since libc commit afc4c418, which comes after
+	// v1.75.7, so there the program does not link with an older libc.
+	//
+	// See https://gitlab.com/cznic/libc/-/issues/56
+	if goos != "linux" && semver.Compare(strings.TrimPrefix(libcVersion, "@"), "v1.75.8") < 0 {
+		t.Skipf("modernc.org/libc%s lacks some of the tested functions on %s/%s", libcVersion, goos, goarch)
+	}
+
 	const src = `
 #include <stdio.h>
 #include <math.h>
