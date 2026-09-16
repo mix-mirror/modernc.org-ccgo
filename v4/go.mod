@@ -1,20 +1,20 @@
 module modernc.org/ccgo/v4
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58
 	github.com/pmezard/go-difflib v1.0.0
-	golang.org/x/mod v0.40.0
-	golang.org/x/tools v0.49.0
+	golang.org/x/mod v0.41.0
+	golang.org/x/tools v0.50.0
 	modernc.org/cc/v4 v4.29.7
 	modernc.org/ccgo/v3 v3.17.0
 	modernc.org/ccorpus2 v1.6.0
 	modernc.org/fileutil v1.4.0
 	modernc.org/gc/v2 v2.6.5
 	modernc.org/gc/v3 v3.1.5
-	modernc.org/libc v1.75.7
+	modernc.org/libc v1.76.0
 	modernc.org/mathutil v1.7.1
 	modernc.org/opt v0.2.0
 	modernc.org/strutil v1.2.1
@@ -28,8 +28,8 @@ require (
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
-	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/sync v0.23.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
 	lukechampine.com/uint128 v1.3.0 // indirect
 	modernc.org/cc/v3 v3.41.0 // indirect
 	modernc.org/memory v1.12.1 // indirect
