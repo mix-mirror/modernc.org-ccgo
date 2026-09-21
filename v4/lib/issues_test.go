@@ -662,6 +662,96 @@ int main(void) {
 	}
 }
 
+// TestIssue62Nostdlib verifies that a link without libc, like the link of libc
+// itself, leaves a __builtin_ name to the Go code of the package even when a
+// linked object defines the plain name. musl's nanf returns __builtin_nanf(""),
+// and linking that to nanf made libc's Xnanf call itself until the stack
+// overflowed. The fma defined here returns 42, so resolving __builtin_fma to it
+// shows in the output.
+//
+// See https://gitlab.com/cznic/ccgo/-/issues/62
+func TestIssue62Nostdlib(t *testing.T) {
+	const src = `
+float nanf(const char *s) { return __builtin_nanf(""); }
+double fma(double x, double y, double z) { return 42.0; }
+double f(double x) { return __builtin_fma(x, x, x); }
+`
+	// The builtins the package provides, as libc does in builtin.go.
+	const support = `package main
+
+import (
+	"fmt"
+	"math"
+)
+
+type TLS struct{}
+
+func X__builtin_nanf(tls *TLS, s uintptr) float32 { return float32(math.NaN()) }
+
+func X__builtin_fma(tls *TLS, x, y, z float64) float64 { return math.FMA(x, y, z) }
+
+func main() {
+	tls := &TLS{}
+	fmt.Println(Xnanf(tls, 0), Xf(tls, 3))
+}
+`
+	cFile := filepath.Join(t.TempDir(), "lib.c")
+	if err := os.WriteFile(cFile, []byte(src), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "support.go"), []byte(support), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	task := NewTask(
+		goos,
+		goarch,
+		[]string{
+			"ccgo",
+			"-o", filepath.Join(dir, "lib.go"),
+			"--package-name=main",
+			"--prefix-external=X",
+			"-ffreestanding",
+			"-nostdlib",
+			cFile,
+		},
+		&stdout, &stderr, nil,
+	)
+	if err := task.Main(); err != nil {
+		t.Fatalf("ccgo: %v\nstdout: %s\nstderr: %s", err, stdout.Bytes(), stderr.Bytes())
+	}
+
+	goBin := filepath.Join(dir, enforceBinaryExt("gobin"))
+	if err := inDir(dir, func() error {
+		if out, err := exec.Command("go", "mod", "init", "test").CombinedOutput(); err != nil {
+			return fmt.Errorf("go mod init: %v\n%s", err, out)
+		}
+
+		if out, err := exec.Command("go", "build", "-o", goBin, ".").CombinedOutput(); err != nil {
+			return fmt.Errorf("go build: %v\n%s", err, out)
+		}
+
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := exec.Command(goBin).CombinedOutput()
+	if len(out) > 1000 {
+		out = out[:1000]
+	}
+	if err != nil {
+		t.Fatalf("Go binary: %v\n%s", err, out)
+	}
+
+	if g, e := string(bytes.TrimSpace(out)), "NaN 12"; g != e {
+		t.Fatalf("got %q, expected %q", g, e)
+	}
+}
+
 // TestIssue54 verifies that designators reaching into a union member of a
 // struct without braces of their own, `.v.Name.id = p, .v.Name.ctx = 7`, lay
 // the union out as that member when one of the values is an address: a

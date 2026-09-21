@@ -822,7 +822,7 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 				}
 
 				lib, ok := l.externs[nm]
-				if !ok {
+				if !ok && l.libc != nil {
 					if r := l.rawName(nm); strings.HasPrefix(r, "__builtin_") {
 						// The compiler calls the libm functions gcc treats as
 						// builtins under their __builtin_ names. When no library
@@ -830,6 +830,13 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 						// libc has Xnextafter but no X__builtin_nextafter, use
 						// the plain one, instead of emitting a reference to a
 						// libc builtin that does not exist.
+						//
+						// Only a libc linked as a package tells which builtins
+						// exist. When linking libc itself (-nostdlib), its
+						// builtins are Go code the linker does not see, and the
+						// plain function can be the one the builtin implements:
+						// musl's nanf returns __builtin_nanf(""), which must not
+						// resolve to nanf.
 						//
 						// See https://gitlab.com/cznic/ccgo/-/issues/62
 						if plain := tag(external) + r[len("__builtin_"):]; l.externs[plain] != nil {
