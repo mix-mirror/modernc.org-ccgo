@@ -55,21 +55,26 @@ func walk(n gc.Node, fn func(n gc.Node, mode int)) {
 	fn(n, walkPost)
 }
 
-func declScope(nm string, scope *gc.Scope) (r *gc.Scope) {
-	var stop bool
+// declScope returns the innermost scope, starting at scope, that declares nm.
+// names caches each scope's declared names: gc.Scope offers only Iterate, so
+// without it every lookup scans whole scopes, and a reference that resolves at
+// package level, or not at all, scans the entire package scope.
+func declScope(nm string, scope *gc.Scope, names map[*gc.Scope]map[string]struct{}) *gc.Scope {
 	for ; scope != nil; scope = scope.Parent() {
-		scope.Iterate(func(name string, n gc.Node) bool {
-			if name == nm {
-				stop = true
-				r = scope
-			}
-			return stop
-		})
-		if stop {
-			break
+		m, ok := names[scope]
+		if !ok {
+			m = map[string]struct{}{}
+			scope.Iterate(func(name string, _ gc.Node) bool {
+				m[name] = struct{}{}
+				return false
+			})
+			names[scope] = m
+		}
+		if _, ok := m[nm]; ok {
+			return scope
 		}
 	}
-	return r
+	return nil
 }
 
 func DeadVariableElimination(filename string, buf []byte) (out []byte, err error) {
@@ -80,6 +85,7 @@ func DeadVariableElimination(filename string, buf []byte) (out []byte, err error
 
 	type varinfo struct{ referenced int }
 	vars := map[*gc.Scope]map[string]*varinfo{}
+	names := map[*gc.Scope]map[string]struct{}{}
 
 	register := func(n gc.Node, sc *gc.Scope, nm string) {
 		m := vars[sc]
@@ -93,7 +99,7 @@ func DeadVariableElimination(filename string, buf []byte) (out []byte, err error
 	}
 
 	reference := func(n gc.Node, sc *gc.Scope, nm string, delta int) {
-		if sc = declScope(nm, sc); sc == nil {
+		if sc = declScope(nm, sc, names); sc == nil {
 			return
 		}
 
@@ -108,7 +114,7 @@ func DeadVariableElimination(filename string, buf []byte) (out []byte, err error
 	}
 
 	eliminate := func(n gc.Node, sc *gc.Scope, nm string) bool {
-		if sc = declScope(nm, sc); sc == nil {
+		if sc = declScope(nm, sc, names); sc == nil {
 			return false
 		}
 
