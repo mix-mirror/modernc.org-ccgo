@@ -157,6 +157,22 @@ func (c *ctx) typ0(b *strings.Builder, n cc.Node, t cc.Type, useTypenames, useTa
 			b.WriteString("complex128")
 		case t.Kind() == cc.Float128:
 			fmt.Fprintf(b, "[2]%suint64", tag(preserve))
+		case t.Kind() == cc.Float16, t.Kind() == cc.BFloat16:
+			// Storage only, like __float128: Go has no 16-bit float, and an
+			// array keeps a stray conversion to a numeric type from compiling
+			// as a silent reinterpretation of the bits. Needed because system
+			// headers declare these types even for code that never uses them:
+			// mingw-w64 GCC 14's avx512bf16intrin.h, pulled in by the
+			// Windows headers, has "typedef __bf16 __m512bh ...".
+			if sz != 2 {
+				c.err(errorf("C %v of unexpected size %d", x.Kind(), sz))
+			}
+			fmt.Fprintf(b, "[1]%suint16", tag(preserve))
+		case t.Kind() == cc.ComplexFloat16:
+			if sz != 4 {
+				c.err(errorf("C %v of unexpected size %d", x.Kind(), sz))
+			}
+			fmt.Fprintf(b, "[2]%suint16", tag(preserve))
 		default:
 			b.WriteString(tag(preserve))
 			b.WriteString("int")

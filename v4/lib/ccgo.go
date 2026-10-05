@@ -27,6 +27,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strings"
+	"sync"
 
 	"modernc.org/cc/v4"
 	"modernc.org/gc/v2"
@@ -77,6 +78,8 @@ type Task struct {
 	isystem               []string // -isystem
 	l                     []string // -l
 	libc                  string   // --libc=modernc.org/libc/v2
+	libcExportsOnce       sync.Once
+	libcExportsSet        nameSet // see libcExports
 	linkFiles             []string
 	o                     string   // -o
 	packageName           string   // --package-name
@@ -596,6 +599,7 @@ func (t *Task) main() (err error) {
 	cfg.UnsignedEnums = t.unsignedEnums
 	cfg.EvalAllMacros = t.evalAllMacros
 	cfg.IgnoreStaticAssert = t.ignoreStaticAsserts
+	cfg.HasBuiltin = t.hasBuiltin
 	if ldflag == "" {
 		if err = cfg.AdjustLongDouble(); err != nil {
 			return err
