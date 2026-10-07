@@ -538,6 +538,9 @@ func (t *Task) main() (err error) {
 		t.cfgArgs = append(t.cfgArgs, ldflag)
 	}
 
+	// -mno-sse4 is not in the list: it is implied by -mno-sse4.1 and clang
+	// reports it as '-mno-sse4.1', which hides it from cc's recovery of a probe
+	// that a non-x86 host compiler rejects.
 	if t.goos == "windows" && (t.goarch == "386" || t.goarch == "amd64") {
 		t.cfgArgs = append(t.cfgArgs,
 			"-mno-3dnow",
@@ -566,7 +569,6 @@ func (t *Task) main() (err error) {
 			"-mno-sse",
 			"-mno-sse2",
 			"-mno-sse3",
-			"-mno-sse4",
 			"-mno-sse4.1",
 			"-mno-sse4.2",
 			"-mno-sse4a",
