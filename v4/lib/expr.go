@@ -4391,6 +4391,11 @@ func (c *ctx) assignmentExpression(w writer, n *cc.AssignmentExpression, t cc.Ty
 		}
 
 		defer func() { r.volatileOrAtomicHandled = true }() //TODO-
+
+		// Like MultiplicativeExpressionMul: x *= y must round explicitly or Go may fuse
+		// the product with a later addition into an FMA instruction.
+		noFMA := op == "*" && cc.IsFloatingPointType(ut) && c.task.target != "freebsd/arm64"
+
 		var k, v string
 		switch n.Case {
 		case cc.AssignmentExpressionAdd: // UnaryExpression "+=" AssignmentExpression
@@ -4424,6 +4429,8 @@ func (c *ctx) assignmentExpression(w writer, n *cc.AssignmentExpression, t cc.Ty
 
 				v = fmt.Sprintf("%s", c.expr(w, n.UnaryExpression, nil, exprDefault))
 				switch {
+				case ct.Kind() == ut.Kind() && noFMA:
+					w.w("%s = %s(%s %s %s);", v, c.typ(n, ut), v, op, c.topExpr(w, n.AssignmentExpression, ct, exprDefault))
 				case ct.Kind() == ut.Kind():
 					ex := c.exprWrap(t, "%s %s %s%s", v, op, c.topExpr(w, n.AssignmentExpression, ct, exprDefault), k)
 					w.w("%s = %s;", v, ex)
@@ -4440,9 +4447,17 @@ func (c *ctx) assignmentExpression(w writer, n *cc.AssignmentExpression, t cc.Ty
 						p := c.f.newAutovarType(n, ut.Pointer())
 						w.w("\n%s = %s;", p, c.expr(w, n.UnaryExpression, ut.Pointer(), exprUintptr))
 						v = fmt.Sprintf("(*(*%s)(%s))", c.typ(n, ut), unsafePointer(p))
-						w.w("\n%s %s= %s%s;", v, op, c.topExpr(w, n.AssignmentExpression, ct, exprDefault), k)
+						if noFMA {
+							w.w("\n%s = %s(%s %s %s);", v, c.typ(n, ut), v, op, c.topExpr(w, n.AssignmentExpression, ct, exprDefault))
+						} else {
+							w.w("\n%s %s= %s%s;", v, op, c.topExpr(w, n.AssignmentExpression, ct, exprDefault), k)
+						}
 					default:
 						switch x, ok := n.UnaryExpression.(*cc.PostfixExpression); {
+						case ok && x.Case == cc.PostfixExpressionSelect && noFMA && c.isSimpleLvalue(x):
+							// the lvalue has no side effects, so it is safe to evaluate it twice
+							l := c.expr(w, n.UnaryExpression, n.UnaryExpression.Type(), exprDefault)
+							w.w("\n%s = %s(%s %s %s)", l, c.typ(n, ut), l, op, c.topExpr(w, n.AssignmentExpression, ct, exprDefault))
 						case ok && x.Case == cc.PostfixExpressionSelect:
 							w.w("\n%s %s= %s%s", c.expr(w, n.UnaryExpression, n.UnaryExpression.Type(), exprDefault), op, c.topExpr(w, n.AssignmentExpression, ct, exprDefault), k)
 						default:
@@ -5338,6 +5353,22 @@ func (c *ctx) isVolatileOrAtomicExpr(n cc.ExpressionNode) bool {
 	}
 
 	return true
+}
+
+// isSimpleLvalue reports whether n is a chain of field selections on an identifier,
+// e.g. a.b or p->b.c, which has no side effects.
+func (c *ctx) isSimpleLvalue(n cc.ExpressionNode) bool {
+	switch x := c.unparen(n).(type) {
+	case *cc.PrimaryExpression:
+		return x.Case == cc.PrimaryExpressionIdent
+	case *cc.PostfixExpression:
+		switch x.Case {
+		case cc.PostfixExpressionSelect, cc.PostfixExpressionPSelect:
+			return c.isSimpleLvalue(x.PostfixExpression)
+		}
+	}
+
+	return false
 }
 
 func (c *ctx) exprWrap(t cc.Type, f string, args ...any) string {
