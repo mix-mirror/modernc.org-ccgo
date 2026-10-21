@@ -328,7 +328,9 @@ func (c *ctx) initializer(w writer, n cc.Node, a []initItem, t cc.Type, off0 int
 
 		return c.initializerArray(w, n, a, x, off0)
 	case *cc.StructType:
-		if len(a) == 1 && a[0].in.Type().Kind() == cc.Struct && t.Size() == a[0].in.Type().Size() {
+		// A struct of the same size can still be the type of the first member, as in
+		// struct { T m; } x = { t }, which initializes x.m by brace elision.
+		if len(a) == 1 && a[0].in.Type().Kind() == cc.Struct && t.Size() == a[0].in.Type().Size() && t.IsCompatible(a[0].in.Type()) {
 			return c.expr(w, a[0].in.AssignmentExpression, t, exprDefault)
 		}
 
