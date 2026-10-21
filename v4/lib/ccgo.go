@@ -685,7 +685,7 @@ func (t *Task) main() (err error) {
 				return err
 			}
 
-			if err := cc.Preprocess(cfg, sources, t.stdout); err != nil {
+			if err := cc.Preprocess(t.tuConfig(), sources, t.stdout); err != nil {
 				return err
 			}
 		}

@@ -294,7 +294,7 @@ func newCtx(task *Task, eh errHandler) *ctx {
 	}
 	return &ctx{
 		anonTypes:           map[cc.Type]string{},
-		cfg:                 task.cfg,
+		cfg:                 task.tuConfig(),
 		defineTaggedEnums:   map[string]*cc.EnumType{},
 		defineTaggedStructs: map[string]*cc.StructType{},
 		defineTaggedUnions:  map[string]*cc.UnionType{},
