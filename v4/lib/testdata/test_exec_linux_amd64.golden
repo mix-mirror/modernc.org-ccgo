@@ -4741,6 +4741,7 @@ assets/github.com/vnmakarov/mir/c-tests/lacc/include.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/increment.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/initialize-address.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/initialize-array.c
+assets/github.com/vnmakarov/mir/c-tests/lacc/initialize-call.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/initialize-float.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/initialize-null.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/initialize-object.c
