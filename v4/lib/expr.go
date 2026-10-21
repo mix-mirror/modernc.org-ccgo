@@ -3856,6 +3856,10 @@ func (c *ctx) postfixExpressionCall(w writer, n *cc.PostfixExpression, mode mode
 		}
 		if !c.task.hidden.has(d.Name()) {
 			inlineFD = c.inlineFuncs[d]
+			if inlineFD == nil && d.Linkage() != cc.None {
+				// a call can resolve to the prototype instead of the definition
+				inlineFD = c.inlineFuncsByName[d.Name()]
+			}
 		}
 		switch x := d.Type().(type) {
 		case *cc.PointerType:

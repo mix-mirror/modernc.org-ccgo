@@ -399,6 +399,7 @@ func (c *ctx) externalDeclaration(w writer, n *cc.ExternalDeclaration) {
 			d.Type().Attributes().GNUInline() ||
 			d.IsInline() && c.isHeader(d) {
 			c.inlineFuncs[d] = n.FunctionDefinition
+			c.inlineFuncsByName[d.Name()] = n.FunctionDefinition
 			return
 		}
 
