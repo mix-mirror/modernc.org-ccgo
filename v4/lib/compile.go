@@ -786,31 +786,15 @@ func (c *ctx) defines(w writer) {
 					}
 				}
 
-				switch {
-				case fp && strings.HasSuffix(r, "F16"):
-					r = r[:len(r)-len("F16")]
-				case fp && strings.HasSuffix(r, "F128"):
-					r = r[:len(r)-len("F128")]
-				case fp && strings.HasSuffix(r, "F32x"):
-					r = r[:len(r)-len("F32x")]
-				case fp && strings.HasSuffix(r, "F64x"):
-					r = r[:len(r)-len("F64x")]
-				case fp && strings.HasSuffix(r, "F32"):
-					r = r[:len(r)-len("F32")]
-				case fp && strings.HasSuffix(r, "F64"):
-					r = r[:len(r)-len("F64")]
-				case fp && strings.HasSuffix(r, "DD"):
-					r = r[:len(r)-len("DD")]
-				case fp && strings.HasSuffix(r, "DF"):
-					r = r[:len(r)-len("DF")]
-				case fp && strings.HasSuffix(r, "DL"):
-					r = r[:len(r)-len("DL")]
-				case fp && strings.HasSuffix(r, "D"):
-					r = r[:len(r)-len("D")]
-				case fp && strings.HasSuffix(r, "F"):
-					r = r[:len(r)-len("F")]
-				case fp && strings.HasSuffix(r, "L"):
-					r = r[:len(r)-len("L")]
+				// Float suffixes are case insensitive, 3.14f is 3.14F.
+				if fp {
+					up := strings.ToUpper(r)
+					for _, suffix := range []string{"F16", "F128", "F32X", "F64X", "F32", "F64", "DD", "DF", "DL", "D", "F", "L"} {
+						if strings.HasSuffix(up, suffix) {
+							r = r[:len(r)-len(suffix)]
+							break
+						}
+					}
 				}
 				if _, err := strconv.ParseFloat(r, 64); err == nil {
 					switch {
