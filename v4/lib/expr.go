@@ -4458,8 +4458,16 @@ func (c *ctx) assignmentExpression(w writer, n *cc.AssignmentExpression, t cc.Ty
 							// the lvalue has no side effects, so it is safe to evaluate it twice
 							l := c.expr(w, n.UnaryExpression, n.UnaryExpression.Type(), exprDefault)
 							w.w("\n%s = %s(%s %s %s)", l, c.typ(n, ut), l, op, c.topExpr(w, n.AssignmentExpression, ct, exprDefault))
-						case ok && x.Case == cc.PostfixExpressionSelect:
+						case ok && x.Case == cc.PostfixExpressionSelect && !noFMA:
 							w.w("\n%s %s= %s%s", c.expr(w, n.UnaryExpression, n.UnaryExpression.Type(), exprDefault), op, c.topExpr(w, n.AssignmentExpression, ct, exprDefault), k)
+						case noFMA:
+							// Any other lvalue, like *p, a[i] or p->f: take its address once,
+							// then round the product explicitly, as the value-producing case
+							// above does.
+							p := c.f.newAutovarType(n, ut.Pointer())
+							w.w("\n%s = %s;", p, c.expr(w, n.UnaryExpression, ut.Pointer(), exprUintptr))
+							v = fmt.Sprintf("(*(*%s)(%s))", c.typ(n, ut), unsafeFromUintptr(p))
+							w.w("\n%s = %s(%s %s %s);", v, c.typ(n, ut), v, op, c.topExpr(w, n.AssignmentExpression, ct, exprDefault))
 						default:
 							w.w("\n(*(*%s)(%s)) %s= %s%s;", c.typ(n, ut), unsafeFromUintptr(c.topExpr(w, n.UnaryExpression, ut.Pointer(), exprUintptr)), op, c.topExpr(w, n.AssignmentExpression, ct, exprDefault), k)
 						}
