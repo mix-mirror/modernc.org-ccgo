@@ -336,7 +336,8 @@ func (c *ctx) initializer(w writer, n cc.Node, a []initItem, t cc.Type, off0 int
 
 		return c.initializerStruct(w, n, a, x, off0)
 	case *cc.UnionType:
-		if len(a) == 1 && a[0].in.Type().Kind() == cc.Union && a[0].in.Type().Size() == x.Size() {
+		// As for structs: a union of the same size can be the type of a member.
+		if len(a) == 1 && a[0].in.Type().Kind() == cc.Union && a[0].in.Type().Size() == x.Size() && t.IsCompatible(a[0].in.Type()) {
 			r := c.expr(w, a[0].in.AssignmentExpression, t, exprDefault)
 			r.n = a[0].in.AssignmentExpression
 			return r
@@ -544,6 +545,12 @@ func (c *ctx) initializerStruct(w writer, n cc.Node, a []initItem, t *cc.StructT
 
 		break
 	}
+	if len(flds) == 0 {
+		// Every field has size zero, so no item has a field to go to.
+		c.err(errorf("%v: TODO initializing a struct with no fields of nonzero size", pos(n)))
+		return nil
+	}
+
 	s := sortInitItems(a, func(off int64) int64 {
 		off -= off0
 		i := sort.Search(len(flds), func(i int) bool {
