@@ -611,9 +611,19 @@ func (c *ctx) verifyTypes() {
 		return
 	}
 
+	// Rendering a type for its ID adds its field types to c.verify, and a
+	// range may or may not visit entries added during it, so repeat until no
+	// new types show up. Of the types with the same ID keep the one that sorts
+	// first, so the output does not depend on the map order.
 	m := map[string]cc.Type{}
-	for k := range c.verify {
-		m[c.typeID(k)] = k
+	for n := -1; n != len(c.verify); {
+		n = len(c.verify)
+		for k := range c.verify {
+			id := c.typeID(k)
+			if prev, ok := m[id]; !ok || k.String() < prev.String() {
+				m[id] = k
+			}
+		}
 	}
 	var a []string
 	for k := range m {
