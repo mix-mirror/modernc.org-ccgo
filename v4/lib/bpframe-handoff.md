@@ -7,7 +7,7 @@ second opinion now.
 Measured 2026-10-19 on ccgo v4.37.0 output (modernc.org/libquickjs master
 865a39e, QuickJS 2026-06-04), Go 1.27.2, linux/amd64 (AMD Ryzen 9 3900X).
 Coordinated between the libquickjs and quickjs sessions. Related:
-`unsafeptr-handoff.md` (resolved in 6cf0225) and `setjmp-recover-handoff.md`.
+`../../docs/handoffs/unsafeptr-handoff.md` (resolved in 6cf0225, released in v4.38.0) and `../../docs/handoffs/setjmp-recover-handoff.md`.
 
 ## TL;DR
 
@@ -235,7 +235,7 @@ Eligibility, as the classifier computes it (a greatest fixpoint):
    across the longjmp, which ccgo lowers to panic/recover in that function.
    Go locals do. If the lowering uses closures, captured locals escape to the
    heap, which is correct but slower. Please check against
-   `setjmp-recover-handoff.md`.
+   `../../docs/handoffs/setjmp-recover-handoff.md`.
 
 ## Reproducing
 

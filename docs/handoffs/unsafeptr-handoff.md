@@ -1,6 +1,6 @@
 # Handoff: replace the `__ccgo_up` vet bypass with `unsafe.Add(nil, x)` (#45)
 
-Status: **RESOLVED** after `v4.37.0`, not yet released. See "Resolution" at
+Status: **RESOLVED and released** in `v4.38.0` (commit `6cf0225`). See "Resolution" at
 the end for what was changed and verified.
 
 Measured 2026-10-19 on ccgo v4.37.0 output (modernc.org/libquickjs
