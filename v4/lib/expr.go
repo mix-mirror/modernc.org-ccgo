@@ -30,6 +30,8 @@ const (
 	exprSelect       // C struct, Go struct
 	exprUintptr      // C pointer, Go uintptr
 	exprVoid         // C void, no Go equivalent
+
+	exprUnsafePointer // C pointer, Go unsafe.Pointer, see goptr.go
 )
 
 const (
@@ -157,6 +159,10 @@ func (c *ctx) convert(n cc.ExpressionNode, w writer, s *buf, from, to cc.Type, f
 		to = to.(*cc.EnumType).UnderlyingType()
 	}
 
+	if fromMode == exprUnsafePointer || toMode == exprUnsafePointer {
+		return c.convertGoPtr(n, s, from, to, fromMode, toMode)
+	}
+
 	if cc.IsScalarType(from) && fromMode == exprDefault && toMode == exprBool {
 		var b buf
 		b.w("(%s != 0)", s)
@@ -205,6 +211,29 @@ func (c *ctx) convert(n cc.ExpressionNode, w writer, s *buf, from, to cc.Type, f
 	// trc("TODO %q %s %s -> %s %s", s, from, fromMode, to, toMode)
 	c.err(errorf("TODO %q %s %s -> %s %s", s, from, fromMode, to, toMode))
 	return s //TODO
+}
+
+// convertGoPtr converts from or to exprUnsafePointer, see goptr.go. A Go
+// pointer never becomes a uintptr: the analysis has classified every use of a
+// converted variable as one the emitter handles in place, so any other
+// request is an internal error, reported instead of miscompiled.
+func (c *ctx) convertGoPtr(n cc.ExpressionNode, s *buf, from, to cc.Type, fromMode, toMode mode) (r *buf) {
+	var b buf
+	switch {
+	case fromMode == exprUnsafePointer && toMode == exprUnsafePointer:
+		return s
+	case fromMode == exprUnsafePointer && toMode == exprBool:
+		b.w("(%s != %snil)", s, tag(preserve))
+		return &b
+	case fromMode == exprUnsafePointer && (toMode == exprVoid || to.Kind() == cc.Void):
+		return s
+	case toMode == exprUnsafePointer && (fromMode == exprDefault || fromMode == exprUintptr) && from.Kind() == cc.Ptr:
+		b.w("%s", unsafePointer(s))
+		return &b
+	}
+
+	c.err(errorf("%v: internal error: Go pointer %q: %s %v -> %s %v", pos(n), s, from, fromMode, to, toMode))
+	return s
 }
 
 func (c *ctx) convertBoolToScalar(n cc.ExpressionNode, s *buf, from cc.Type, to cc.Type, fromMode, toMode mode) (r *buf) {
@@ -505,6 +534,10 @@ func (c *ctx) expr0(w writer, n cc.ExpressionNode, t cc.Type, mod mode) (r *buf,
 			r = c.reduceBitFieldValue(r, bf, rt, mod)
 		}
 	}(mod)
+
+	if mod == exprUnsafePointer {
+		return c.goPtrExpr(w, n, t)
+	}
 
 out:
 	switch {
@@ -1370,6 +1403,10 @@ func (c *ctx) equalityExpression(w writer, n *cc.EqualityExpression, t cc.Type, 
 
 	ct := c.usualArithmeticConversions(n.EqualityExpression.Type(), n.RelationalExpression.Type())
 	rt, rmode = n.Type(), exprBool
+	if r, ok := c.goPtrCompare(w, n.Token.SrcStr(), n.EqualityExpression, n.RelationalExpression, ct); ok {
+		return r, rt, rmode
+	}
+
 out:
 	switch n.Case {
 	case cc.EqualityExpressionEq: // EqualityExpression "==" RelationalExpression
@@ -1408,6 +1445,10 @@ func (c *ctx) relationExpression(w writer, n *cc.RelationalExpression, t cc.Type
 
 	ct := c.usualArithmeticConversions(n.RelationalExpression.Type(), n.ShiftExpression.Type())
 	rt, rmode = n.Type(), exprBool
+	if r, ok := c.goPtrCompare(w, n.Token.SrcStr(), n.RelationalExpression, n.ShiftExpression, ct); ok {
+		return r, rt, rmode
+	}
+
 	switch n.Case {
 	case cc.RelationalExpressionLt: // RelationalExpression '<' ShiftExpression
 		x, y := c.binopArgs(w, n.RelationalExpression, n.ShiftExpression, ct)
@@ -1540,6 +1581,11 @@ out:
 		}
 
 		rt, rmode = n.Type(), mode
+		if mode == exprVoid && c.isGoPtrVar(n.UnaryExpression) {
+			b.w("%s", c.goPtrIncDec(n.UnaryExpression, 1))
+			break
+		}
+
 		switch ue := n.UnaryExpression.Type(); {
 		case ue.Kind() == cc.Ptr && ue.(*cc.PointerType).Elem().Undecay().Size() != 1:
 			sz := ue.(*cc.PointerType).Elem().Undecay().Size()
@@ -1557,10 +1603,9 @@ out:
 				default:
 					pt := n.UnaryExpression.Type().Pointer()
 					v := c.f.newAutovarType(n, n.UnaryExpression.Type())
-					v2 := c.f.newAutovarType(n, pt)
-					w.w("%s = %s;", v2, c.expr(w, n.UnaryExpression, pt, exprUintptr))
-					w.w("(*(*%s)(%s)) += %d;", c.typ(n, n.UnaryExpression.Type()), unsafePointer(v2), sz)
-					w.w("%s = (*(*%s)(%s));", v, c.typ(n, n.UnaryExpression.Type()), unsafePointer(v2))
+					ds := c.lvalueTemp(w, n, n.UnaryExpression, pt)
+					w.w("%s += %d;", ds, sz)
+					w.w("%s = %s;", v, ds)
 					b.w("%s", v)
 				}
 			default:
@@ -1596,9 +1641,7 @@ out:
 					b.w("%s", v)
 				default:
 					v := c.f.newAutovarType(n, n.UnaryExpression.Type())
-					v2 := c.f.newAutovarType(n, n.UnaryExpression.Type().Pointer())
-					ds := fmt.Sprintf("(*(*%s)(%s))", c.typ(n, n.UnaryExpression.Type()), unsafePointer(v2))
-					w.w("%s = %s;", v2, c.expr(w, n.UnaryExpression, n.UnaryExpression.Type().Pointer(), exprUintptr))
+					ds := c.lvalueTemp(w, n, n.UnaryExpression, n.UnaryExpression.Type().Pointer())
 					w.w("%s = %s;", ds, c.exprWrap(t, "%s+1", ds))
 					w.w("%s = %s;", v, ds)
 					b.w("%s", v)
@@ -1614,6 +1657,11 @@ out:
 		}
 
 		rt, rmode = n.Type(), mode
+		if mode == exprVoid && c.isGoPtrVar(n.UnaryExpression) {
+			b.w("%s", c.goPtrIncDec(n.UnaryExpression, -1))
+			break
+		}
+
 		switch ue := n.UnaryExpression.Type(); {
 		case ue.Kind() == cc.Ptr && ue.(*cc.PointerType).Elem().Undecay().Size() != 1:
 			sz := ue.(*cc.PointerType).Elem().Undecay().Size()
@@ -1631,10 +1679,9 @@ out:
 				default:
 					pt := n.UnaryExpression.Type().Pointer()
 					v := c.f.newAutovarType(n, n.UnaryExpression.Type())
-					v2 := c.f.newAutovarType(n, pt)
-					w.w("%s = %s;", v2, c.expr(w, n.UnaryExpression, pt, exprUintptr))
-					w.w("(*(*%s)(%s)) -= %d;", c.typ(n, n.UnaryExpression.Type()), unsafePointer(v2), sz)
-					w.w("%s = (*(*%s)(%s));", v, c.typ(n, n.UnaryExpression.Type()), unsafePointer(v2))
+					ds := c.lvalueTemp(w, n, n.UnaryExpression, pt)
+					w.w("%s -= %d;", ds, sz)
+					w.w("%s = %s;", v, ds)
 					b.w("%s", v)
 				}
 			default:
@@ -1669,9 +1716,7 @@ out:
 					b.w("%s", v)
 				default:
 					v := c.f.newAutovarType(n, n.UnaryExpression.Type())
-					v2 := c.f.newAutovarType(n, n.UnaryExpression.Type().Pointer())
-					ds := fmt.Sprintf("(*(*%s)(%s))", c.typ(n, n.UnaryExpression.Type()), unsafePointer(v2))
-					w.w("%s = %s;", v2, c.expr(w, n.UnaryExpression, n.UnaryExpression.Type().Pointer(), exprUintptr))
+					ds := c.lvalueTemp(w, n, n.UnaryExpression, n.UnaryExpression.Type().Pointer())
 					w.w("%s = %s;", ds, c.exprWrap(t, "%s-1", ds))
 					w.w("%s = %s;", v, ds)
 					b.w("%s", v)
@@ -1724,6 +1769,9 @@ out:
 				defer func() { r.volatileOrAtomicHandled = true }()
 				return c.atomicLoad(w, n, c.topExpr(w, n.CastExpression, n.CastExpression.Type(), exprDefault), n.Type()), n.Type(), mode
 			}
+		}
+		if r, rt, rmode, ok := c.goPtrLvalue(w, n, mode); ok {
+			return r, rt, rmode
 		}
 		// trc("%v: nt %v, ct %v, '%s' %v", n.Token.Position(), n.Type(), n.CastExpression.Type(), cc.NodeSource(n), mode)
 		if ce, ok := n.CastExpression.(*cc.CastExpression); ok && ce.Case == cc.CastExpressionCast {
@@ -1879,6 +1927,20 @@ out:
 		c.err(errorf("internal error %T %v", n, n.Case))
 	}
 	return &b, rt, rmode
+}
+
+// lvalueTemp stores the address of the lvalue n into a fresh variable and
+// returns the dereference of that variable, for an lvalue that is read and
+// written in one operation. The variable holds an unsafe.Pointer when the
+// address is a Go pointer, see goptr.go, and a uintptr otherwise.
+func (c *ctx) lvalueTemp(w writer, site cc.Node, n cc.ExpressionNode, pt cc.Type) (deref string) {
+	if s, ok := c.goPtrLvalueTemp(w, n, n.Type()); ok {
+		return s
+	}
+
+	v := c.f.newAutovarType(site, pt)
+	w.w("%s = %s;", v, c.expr(w, n, pt, exprUintptr))
+	return fmt.Sprintf("(*(*%s)(%s))", c.typ(site, n.Type()), unsafePointer(v))
 }
 
 func (c *ctx) mul(n cc.ExpressionNode) (r string) {
@@ -2128,6 +2190,10 @@ out:
 	case cc.PostfixExpressionPrimary: // PrimaryExpression
 		c.err(errorf("TODO %v", n.Case))
 	case cc.PostfixExpressionIndex: // PostfixExpression '[' ExpressionList ']'
+		if r, rt, rmode, ok := c.goPtrLvalue(w, n, mode); ok {
+			return r, rt, rmode
+		}
+
 		if x, ok := n.PostfixExpression.Type().(*cc.PointerType); ok {
 			return c.postfixExpressionIndex(w, n, n.PostfixExpression, n.ExpressionList, x, n.Type(), t, mode)
 		}
@@ -2287,8 +2353,16 @@ out:
 			return c.postfixExpressionCall(w, n, mode)
 		}
 	case cc.PostfixExpressionSelect: // PostfixExpression '.' IDENTIFIER
+		if r, rt, rmode, ok := c.goPtrLvalue(w, n, mode); ok {
+			return r, rt, rmode
+		}
+
 		return c.postfixExpressionSelect(w, n, t, mode)
 	case cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER
+		if r, rt, rmode, ok := c.goPtrLvalue(w, n, mode); ok {
+			return r, rt, rmode
+		}
+
 		return c.postfixExpressionPSelect(w, n, t, mode)
 	case cc.PostfixExpressionInc: // PostfixExpression "++"
 		if c.isBitField(n.PostfixExpression) {
@@ -2296,6 +2370,11 @@ out:
 		}
 
 		rt, rmode = n.Type(), mode
+		if mode == exprVoid && c.isGoPtrVar(n.PostfixExpression) {
+			b.w("%s", c.goPtrIncDec(n.PostfixExpression, 1))
+			break
+		}
+
 		switch pe := n.PostfixExpression.Type(); {
 		case pe.Kind() == cc.Ptr && pe.(*cc.PointerType).Elem().Undecay().Size() != 1:
 			sz := pe.(*cc.PointerType).Elem().Undecay().Size()
@@ -2312,10 +2391,9 @@ out:
 					w.w("%s += %d;", ds, sz)
 					b.w("%s", v)
 				default:
-					v2 := c.f.newAutovarType(n, n.PostfixExpression.Type().Pointer())
-					w.w("%s = %s;", v2, c.expr(w, n.PostfixExpression, n.PostfixExpression.Type().Pointer(), exprUintptr))
-					w.w("%s = (*(*%s)(%s));", v, c.typ(n, n.PostfixExpression.Type()), unsafePointer(v2))
-					w.w("(*(*%s)(%s)) += %d;", c.typ(n, n.PostfixExpression.Type()), unsafePointer(v2), sz)
+					ds := c.lvalueTemp(w, n, n.PostfixExpression, n.PostfixExpression.Type().Pointer())
+					w.w("%s = %s;", v, ds)
+					w.w("%s += %d;", ds, sz)
 					b.w("%s", v)
 				}
 			default:
@@ -2355,9 +2433,7 @@ out:
 					w.w("%s = %s;", ds, c.exprWrap(t, "%s+1", ds))
 					b.w("%s", v)
 				default:
-					v2 := c.f.newAutovarType(n, n.PostfixExpression.Type().Pointer())
-					ds := fmt.Sprintf("(*(*%s)(%s))", c.typ(n, n.PostfixExpression.Type()), unsafePointer(v2))
-					w.w("%s = %s;", v2, c.expr(w, n.PostfixExpression, n.PostfixExpression.Type().Pointer(), exprUintptr))
+					ds := c.lvalueTemp(w, n, n.PostfixExpression, n.PostfixExpression.Type().Pointer())
 					w.w("%s = %s;", v, ds)
 					w.w("%s = %s;", ds, c.exprWrap(t, "%s+1", ds))
 					b.w("%s", v)
@@ -2384,6 +2460,11 @@ out:
 		}
 
 		rt, rmode = n.Type(), mode
+		if mode == exprVoid && c.isGoPtrVar(n.PostfixExpression) {
+			b.w("%s", c.goPtrIncDec(n.PostfixExpression, -1))
+			break
+		}
+
 		switch pe := n.PostfixExpression.Type(); {
 		case pe.Kind() == cc.Ptr && pe.(*cc.PointerType).Elem().Undecay().Size() != 1:
 			sz := pe.(*cc.PointerType).Elem().Undecay().Size()
@@ -2399,10 +2480,9 @@ out:
 					w.w("%s -= %d;", ds, sz)
 					b.w("%s", v)
 				default:
-					v2 := c.f.newAutovarType(n, n.PostfixExpression.Type().Pointer())
-					w.w("%s = %s;", v2, c.expr(w, n.PostfixExpression, n.PostfixExpression.Type().Pointer(), exprUintptr))
-					w.w("%s = (*(*%s)(%s));", v, c.typ(n, n.PostfixExpression.Type()), unsafePointer(v2))
-					w.w("(*(*%s)(%s)) -= %d;", c.typ(n, n.PostfixExpression.Type()), unsafePointer(v2), sz)
+					ds := c.lvalueTemp(w, n, n.PostfixExpression, n.PostfixExpression.Type().Pointer())
+					w.w("%s = %s;", v, ds)
+					w.w("%s -= %d;", ds, sz)
 					b.w("%s", v)
 				}
 			default:
@@ -2436,9 +2516,7 @@ out:
 					w.w("%s = %s;", ds, c.exprWrap(t, "%s-1", ds))
 					b.w("%s", v)
 				default:
-					v2 := c.f.newAutovarType(n, n.PostfixExpression.Type().Pointer())
-					ds := fmt.Sprintf("(*(*%s)(%s))", c.typ(n, n.PostfixExpression.Type()), unsafePointer(v2))
-					w.w("%s = %s;", v2, c.expr(w, n.PostfixExpression, n.PostfixExpression.Type().Pointer(), exprUintptr))
+					ds := c.lvalueTemp(w, n, n.PostfixExpression, n.PostfixExpression.Type().Pointer())
 					w.w("%s = %s;", v, ds)
 					w.w("%s = %s;", ds, c.exprWrap(t, "%s-1", ds))
 					b.w("%s", v)
@@ -4021,6 +4099,10 @@ func (c *ctx) postfixExpressionCall(w writer, n *cc.PostfixExpression, mode mode
 	}
 	ftp := ft.Parameters()
 	params := c.normalizeParams(ftp)
+	var gfn *goPtrFn
+	if inlineFD == nil {
+		gfn = c.goPtr.callee(d)
+	}
 	var xargs []*buf
 	var xtypes []cc.Type
 	for i, v := range args {
@@ -4042,6 +4124,9 @@ func (c *ctx) postfixExpressionCall(w writer, n *cc.PostfixExpression, mode mode
 			if d := c.declaratorOf(v); d != nil && d.IsFuncDef() {
 				mode = exprUintptr
 			}
+		}
+		if gfn != nil && i < len(gfn.converted) && gfn.converted[i] {
+			mode = exprUnsafePointer // the parameter is a Go pointer, see goptr.go
 		}
 		switch {
 		case i == 1 && syncOpAndFetch: // __sync_add_and_fetch(type *ptr, type value)
@@ -4176,9 +4261,9 @@ func (c *ctx) postfixExpressionCall(w writer, n *cc.PostfixExpression, mode mode
 		}
 		return &b, rt, rmode
 	case c.f == nil:
-		b.w("%s(%snil", c.expr(w, n.PostfixExpression, nil, exprCall), tag(preserve))
+		b.w("%s(%snil", c.calleeName(w, n.PostfixExpression, gfn), tag(preserve))
 	default:
-		b.w("%s(%stls", c.expr(w, n.PostfixExpression, nil, exprCall), tag(ccgo))
+		b.w("%s(%stls", c.calleeName(w, n.PostfixExpression, gfn), tag(ccgo))
 	}
 	switch {
 	case ft.IsVariadic():
@@ -4210,6 +4295,17 @@ func (c *ctx) postfixExpressionCall(w writer, n *cc.PostfixExpression, mode mode
 		rmode = exprVoid
 	}
 	return &b, rt, rmode
+}
+
+// calleeName returns the callee of a direct call: the function body emitted
+// with converted parameters when gfn is set, see goptr.go.
+func (c *ctx) calleeName(w writer, callee cc.ExpressionNode, gfn *goPtrFn) string {
+	s := fmt.Sprintf("%s", c.expr(w, callee, nil, exprCall))
+	if gfn != nil {
+		return gfn.linkName
+	}
+
+	return s
 }
 
 func (c *ctx) normalizeParams(params []*cc.Parameter) []*cc.Parameter {
@@ -4386,7 +4482,11 @@ func (c *ctx) assignmentExpression(w writer, n *cc.AssignmentExpression, t cc.Ty
 
 			defer func() { c.exprNestLevel++ }()
 
-			b.w("%s", c.expr(w, n.AssignmentExpression, n.UnaryExpression.Type(), exprDefault))
+			rhsMode := exprDefault
+			if c.isGoPtrVar(n.UnaryExpression) {
+				rhsMode = exprUnsafePointer
+			}
+			b.w("%s", c.expr(w, n.AssignmentExpression, n.UnaryExpression.Type(), rhsMode))
 			w.w("%s;", &b)
 			b.reset()
 			return &b, n.Type(), exprVoid
@@ -4503,6 +4603,13 @@ func (c *ctx) assignmentExpression(w writer, n *cc.AssignmentExpression, t cc.Ty
 					return c.atomicStore(w, n, &bp, &v, ut, mode), ut, mode
 				}
 
+				if mode == exprVoid && c.isGoPtrVar(n.UnaryExpression) {
+					// p += i, p -= i on a Go pointer, see goptr.go.
+					v = c.goPtrName(n.UnaryExpression)
+					w.w("%s = %s;", v, unsafe("Add", fmt.Sprintf("%s, %s", v, c.goPtrOffset(w, n.UnaryExpression, n.AssignmentExpression, op == "-"))))
+					break
+				}
+
 				v = fmt.Sprintf("%s", c.expr(w, n.UnaryExpression, nil, exprDefault))
 				switch {
 				case ct.Kind() == ut.Kind() && noFMA:
@@ -4520,9 +4627,13 @@ func (c *ctx) assignmentExpression(w writer, n *cc.AssignmentExpression, t cc.Ty
 				case ct.Kind() == ut.Kind():
 					switch {
 					case mode == exprDefault:
-						p := c.f.newAutovarType(n, ut.Pointer())
-						w.w("\n%s = %s;", p, c.expr(w, n.UnaryExpression, ut.Pointer(), exprUintptr))
-						v = fmt.Sprintf("(*(*%s)(%s))", c.typ(n, ut), unsafePointer(p))
+						if ds, ok := c.goPtrLvalueTemp(w, n.UnaryExpression, ut); ok {
+							v = ds
+						} else {
+							p := c.f.newAutovarType(n, ut.Pointer())
+							w.w("\n%s = %s;", p, c.expr(w, n.UnaryExpression, ut.Pointer(), exprUintptr))
+							v = fmt.Sprintf("(*(*%s)(%s))", c.typ(n, ut), unsafePointer(p))
+						}
 						if noFMA {
 							w.w("\n%s = %s(%s %s %s);", v, c.typ(n, ut), v, op, c.topExpr(w, n.AssignmentExpression, ct, exprDefault))
 						} else {
@@ -4540,18 +4651,29 @@ func (c *ctx) assignmentExpression(w writer, n *cc.AssignmentExpression, t cc.Ty
 							// Any other lvalue, like *p, a[i] or p->f: take its address once,
 							// then round the product explicitly, as the value-producing case
 							// above does.
-							p := c.f.newAutovarType(n, ut.Pointer())
-							w.w("\n%s = %s;", p, c.expr(w, n.UnaryExpression, ut.Pointer(), exprUintptr))
-							v = fmt.Sprintf("(*(*%s)(%s))", c.typ(n, ut), unsafeFromUintptr(p))
+							if ds, ok := c.goPtrLvalueTemp(w, n.UnaryExpression, ut); ok {
+								v = ds
+							} else {
+								p := c.f.newAutovarType(n, ut.Pointer())
+								w.w("\n%s = %s;", p, c.expr(w, n.UnaryExpression, ut.Pointer(), exprUintptr))
+								v = fmt.Sprintf("(*(*%s)(%s))", c.typ(n, ut), unsafeFromUintptr(p))
+							}
 							w.w("\n%s = %s(%s %s %s);", v, c.typ(n, ut), v, op, c.topExpr(w, n.AssignmentExpression, ct, exprDefault))
+						case c.isGoPtrLvalue(n.UnaryExpression):
+							base, off := c.goPtrAddr(w, n.UnaryExpression)
+							w.w("\n(*(*%s)(%s)) %s= %s%s;", c.typ(n, ut), goPtrAdd(base, off), op, c.topExpr(w, n.AssignmentExpression, ct, exprDefault), k)
 						default:
 							w.w("\n(*(*%s)(%s)) %s= %s%s;", c.typ(n, ut), unsafeFromUintptr(c.topExpr(w, n.UnaryExpression, ut.Pointer(), exprUintptr)), op, c.topExpr(w, n.AssignmentExpression, ct, exprDefault), k)
 						}
 					}
 				default:
-					p := c.f.newAutovarType(n, ut.Pointer())
-					w.w("\n%s = %s;", p, c.expr(w, n.UnaryExpression, ut.Pointer(), exprUintptr))
-					v = fmt.Sprintf("(*(*%s)(%s))", c.typ(n, ut), unsafePointer(p))
+					if ds, ok := c.goPtrLvalueTemp(w, n.UnaryExpression, ut); ok {
+						v = ds
+					} else {
+						p := c.f.newAutovarType(n, ut.Pointer())
+						w.w("\n%s = %s;", p, c.expr(w, n.UnaryExpression, ut.Pointer(), exprUintptr))
+						v = fmt.Sprintf("(*(*%s)(%s))", c.typ(n, ut), unsafePointer(p))
+					}
 					w.w("\n%s = %s((%s(%s)) %s ((%s)%s));", v, c.typ(n, ut), c.typ(n, ct), v, op, c.expr(w, n.AssignmentExpression, ct, exprDefault), k)
 				}
 			}
@@ -4691,6 +4813,23 @@ out:
 			var info *declInfo
 			if c.f != nil {
 				info = c.f.declInfos.info(x)
+			}
+			if c.goPtrVar(x) {
+				// A Go pointer, see goptr.go. Its value is never a uintptr.
+				switch mode {
+				case exprDefault, exprUnsafePointer:
+					b.w("%s", linkName)
+					return &b, rt, exprUnsafePointer
+				case exprLvalue:
+					b.w("%s", linkName)
+					return &b, rt, mode
+				case exprVoid:
+					b.w("(%s)", linkName)
+					return &b, rt, exprDefault
+				default:
+					c.err(errorf("%v: internal error: Go pointer %s in mode %v", n.Position(), nm, mode))
+					return &b, rt, mode
+				}
 			}
 			switch {
 			case info != nil && info.pinned():

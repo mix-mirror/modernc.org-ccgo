@@ -56,6 +56,7 @@ var (
 	//TODO oRace         = flag.Bool("xrace", false, "execute transpiled Go files with -race") //TODO default<-true once #45 is fixed
 	oXTags = flag.String("xtags", "", "passed to go build of TestSQLite")
 	oXWork = flag.String("xwork", "", "TestExec will use a go.work file for packages in the CSV list")
+	oGoPtr = flag.String("goptr", "", "the default of ccgo --goptr for every ccgo invocation: on, off or all")
 
 	cfs         fs.FS
 	goarch      = runtime.GOARCH
@@ -119,6 +120,9 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 	if *oRE != "" {
 		re = regexp.MustCompile(*oRE)
+	}
+	if *oGoPtr != "" {
+		goPtrDefault = *oGoPtr
 	}
 	cfg, err := cc.NewConfig(runtime.GOOS, runtime.GOARCH)
 	if err != nil {

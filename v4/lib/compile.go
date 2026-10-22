@@ -6,6 +6,7 @@ package ccgo // import "modernc.org/ccgo/v4/lib"
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"go/token"
@@ -255,6 +256,7 @@ type ctx struct {
 	f                    *fnCtx
 	fields               map[fielder]*nameSpace
 	fn                   *cc.Declarator
+	goPtr                *goPtrInfo // see goptr.go
 	ifn                  string
 	imports              map[string]string // import path: qualifier
 	initPatch            func(int64, *buf)
@@ -414,7 +416,8 @@ func (c *ctx) compile(ifn, ofn string) (err error) {
 	}()
 
 	w := bufio.NewWriter(f)
-	c.out = w
+	var outBuf bytes.Buffer
+	c.out = &outBuf // resolved frame markers are written to w at the end, see goPtrResolveFrames
 
 	defer func() {
 		if err := w.Flush(); err != nil {
@@ -477,6 +480,7 @@ func (c *ctx) compile(ifn, ofn string) (err error) {
 	c.void = c.ast.Void
 	c.pvoid = c.ast.PVoid
 	c.ifn = ifn
+	c.analyzeGoPtr()
 	c.prologue(c)
 	c.defines(c)
 
@@ -573,6 +577,10 @@ func (c *ctx) compile(ifn, ofn string) (err error) {
 	a = strings.Split(s, "`")
 	s = strutil.JoinFields(a, "|")
 	c.w("\n\nconst %s%s = `%s`", tag(meta), jsonMetaRawName, s)
+	if _, err := w.Write(c.goPtrResolveFrames(outBuf.Bytes())); err != nil {
+		return err
+	}
+
 	return nil
 }
 

@@ -349,6 +349,9 @@ func (f *fnCtx) declareLocals() string {
 
 		if k.StorageDuration() != cc.Static && v != "" {
 			ts := f.c.typ(k, k.Type())
+			if f.c.goPtrVar(k) {
+				ts = goPtrType()
+			}
 			m[ts] = append(m[ts], v)
 		}
 	}
@@ -521,6 +524,10 @@ func (c *ctx) functionDefinition0(w writer, sep string, pos cc.Node, d *cc.Decla
 		}
 	}
 
+	var gfn *goPtrFn
+	if c.goPtr != nil && !local && alias == "" {
+		gfn = c.goPtr.fns[d]
+	}
 	c.pass = 1
 	for _, v := range ft.Parameters() {
 		if v.Declarator != nil {
@@ -545,6 +552,9 @@ func (c *ctx) functionDefinition0(w writer, sep string, pos cc.Node, d *cc.Decla
 		info.bpOff = roundup(c.f.tlsAllocs, bpAlign(d.Type()))
 		c.f.tlsAllocs = info.bpOff + d.Type().Size()
 	}
+	if c.goPtr != nil && !local {
+		c.goPtr.framed[d] = c.f.tlsAllocs+int64(c.f.maxVaListSize) != 0
+	}
 	c.pass = 2
 	c.f.nextID = 0
 	c.f.autovarNesting = 0
@@ -557,12 +567,15 @@ func (c *ctx) functionDefinition0(w writer, sep string, pos cc.Node, d *cc.Decla
 		// trc("s `%s`", s) //TODO-DBG
 		w.w("%s%s%s := func%s", s, c.declaratorTag(d), d.Name(), c.signature(ft, true, false, true))
 	default:
-		nm := d.Name()
+		linkName := c.declaratorTag(d) + d.Name()
 		if alias != "" {
-			nm = alias
+			linkName = c.declaratorTag(d) + alias
+		}
+		if gfn != nil {
+			linkName = gfn.linkName
 		}
 		// trc("s `%s`", s) //TODO-DBG
-		w.w("%sfunc %s%s%s ", s, c.declaratorTag(d), nm, c.signature(ft, true, isMain, true))
+		w.w("%sfunc %s%s ", s, linkName, c.signature(ft, true, isMain, true))
 	}
 	switch {
 	case alias != "":
@@ -588,6 +601,9 @@ func (c *ctx) functionDefinition0(w writer, sep string, pos cc.Node, d *cc.Decla
 		c.compoundStatement(w, cs, true, "")
 	}
 	w.w("\n\n")
+	if gfn != nil && gfn.wrapper {
+		c.goPtrWrapper(w, d, ft, gfn)
+	}
 }
 
 func (c *ctx) cdoc(sep string, n cc.Node) (r string) {
@@ -1027,6 +1043,9 @@ func (c *ctx) winapiSignature(n cc.Node, f *cc.FunctionType) string {
 	return b.String()
 }
 
+// signature renders the Go signature of f. With paramNames, the signature is
+// that of a definition in the current function context and a parameter that
+// is a Go pointer, see goptr.go, is typed unsafe.Pointer.
 func (c *ctx) signature(f *cc.FunctionType, paramNames, isMain, useNames bool) string {
 	var b strings.Builder
 	switch {
@@ -1053,6 +1072,10 @@ func (c *ctx) signature(f *cc.FunctionType, paramNames, isMain, useNames bool) s
 					default:
 						fmt.Fprintf(&b, "%s ", c.f.locals[v.Declarator])
 					}
+				}
+				if c.goPtrVar(v.Declarator) {
+					b.WriteString(goPtrType())
+					continue
 				}
 			}
 			b.WriteString(c.typ2(v, v.Type().Decay(), useNames))
@@ -1454,6 +1477,11 @@ func (c *ctx) initDeclaratorInit(w writer, sep string, info *declInfo, d *cc.Dec
 					}
 				}
 			default:
+				if c.goPtrVar(d) {
+					w.w("%s%s%s = %s;", sep, c.posComment(d), linkName, c.topExpr(w, c.unbracedInitilizer(initializer).AssignmentExpression, t, exprUnsafePointer))
+					break
+				}
+
 				if c.unbracedInitilizer(initializer).Case != cc.InitializerExpr {
 					if b := c.initCode(w,
 						func(off int64) string {

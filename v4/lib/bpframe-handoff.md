@@ -1,8 +1,9 @@
 # Handoff: keep locals whose address does not escape out of the TLS frame
 
-Status: **step 1 RESOLVED** on 2026-10-21, see "Resolution, step 1" at the
-end. Step 2 and the smaller items are open. The gate, modernc.org/sqlite with
-SQLite 3.54.1, was released as v1.61.0 on 2026-10-21.
+Status: **steps 1 and 2 RESOLVED**, see "Resolution, step 1" (2026-10-21)
+and "Resolution, step 2" (2026-10-22) at the end. The smaller items are open.
+The gate, modernc.org/sqlite with SQLite 3.54.1, was released as v1.61.0 on
+2026-10-21.
 
 Measured 2026-10-19 on ccgo v4.37.0 output (modernc.org/libquickjs master
 865a39e, QuickJS 2026-06-04), Go 1.27.2, linux/amd64 (AMD Ryzen 9 3900X).
@@ -368,3 +369,180 @@ Measured by the libquickjs session on 2026-10-21 (libquickjs ba53053, Go
 - `(c ? a : b).u.x` and `(a = b).u.x`, a union member of a conditional or an
   assignment expression, fail with a TODO (`"ccv1" from=V struct 16
   exprUintptr -> to=pointer to V`) on master too. Unrelated to frames.
+
+## Resolution, step 2 (2026-10-22)
+
+Implemented in ccgo: goptr.go (the analysis, the predicates and the emission
+helpers), the mode `exprUnsafePointer` in expr.go with branches at the
+dereference, comparison, assignment, increment and call sites, the signature,
+local declaration and wrapper emission in decl.go. Flag: `--goptr=on|off|all`,
+default on; `off` restores the previous output, `all` converts every safe
+variable whether or not a local's address reaches it, which is the stress
+mode the test suite also runs in (`go test -goptr=all`). Test: `TestGoPtr` in
+goptr_test.go. The smaller items stay open.
+
+### What is converted
+
+A pointer-typed parameter of a function defined in the translation unit, or a
+pointer-typed local, becomes a Go `unsafe.Pointer` when every use of its value
+is one of:
+
+- a dereference, as `*p`, `p->m`, `p[i]`, and any member, element or address
+  taken of the object so reached; the object may be read, written, compound
+  assigned, incremented, passed or returned by value;
+- a comparison with another pointer or with NULL, or a use as a condition;
+- `p + i`, `p - i`, a cast to another pointer type, `p++`, `p += i`, where the
+  result is used the same way;
+- an assignment to another such variable, or an argument of a direct call
+  whose parameter is such a variable: a greatest fixpoint over the call graph
+  of the translation unit, so mutually recursive and chained out-parameters
+  work.
+
+Everything else is a sink: a store into memory, a return, a conversion to an
+integer, an argument of an indirect call, of a libc or any other external
+function, of an inlined function or of a variadic position, a va_list, a
+comparison with or an assignment of a non-zero integer constant (a C sentinel
+in a Go pointer slot is an invalid pointer to the runtime), a bitfield or a
+volatile object reached through the pointer, a conditional or a statement
+expression yielding the pointer, and anything the classifier does not list.
+
+A safe variable is converted only when the address of an automatic variable
+can reach it, directly or through other converted variables, so that code
+without such calls is generated exactly as before. The address itself is
+produced as `unsafe.Pointer(&v)`, `unsafe.Add(unsafe.Pointer(&v), off)` for a
+member or a constant array index, without pinning v. A variable pinned by
+another use is addressed through its frame slot and still passed as an
+`unsafe.Pointer`.
+
+A function with a converted parameter is emitted with the new signature. An
+exported function, or a static one referenced other than by a direct call,
+keeps a wrapper with the original name and the uintptr signature that converts
+the arguments and calls the body, which is emitted as `name__ccgo_gp`; the ABI
+seen from other translation units, through function pointers and from Go stays
+the same. This is what makes the QuickJS chains work: `JS_ToInt64Clamp`,
+`JS_ToInt32Sat`, ... are exported but their out-parameters flow into them from
+static callers with `&local` arguments.
+
+### Recursion stays bounded
+
+The libquickjs session found that the conversion removed the only frame from
+11 functions that each close a recursive cycle of the parser, the module
+linker, JSON and the string ropes. libquickjs bounds recursion by comparing
+`libc.TLS.StackSlots` with a limit, which only works while every cycle holds
+a frame; without one, `eval("!".repeat(1e7) + "1")` ended in Go's fatal
+goroutine stack overflow instead of a SyntaxError.
+
+`goPtrFrames` keeps that bound: over the direct calls within the translation
+unit, with ccgo-inlined functions folded into their callers, every recursive
+cycle whose remaining frames the conversion took away gets a one-slot frame
+(`tls.Alloc(16); defer tls.Free(16)`) in one of the functions that lost its
+frame, the first in translation unit order. A function lost its frame when
+its first pass leaves it without one while the analysis saw the address of
+one of its locals flow into a converted variable. Such a function emits a
+marker where the frame would go; once the whole unit is emitted and every
+frame is known, the cycles are computed and each marker becomes the frame or
+nothing. A cycle that never had a frame stays as it was. On libquickjs this
+restores a frame in 10 functions, the 11 above minus `js_parse_var`, whose
+cycle `js_parse_function_decl2` covers, and the cycle check of the
+libquickjs session then lists exactly the 16 frameless cycles the base has.
+Its tests on that output: `"!".repeat(1e7) + "1"` ends in `SyntaxError:
+stack overflow` with 1.7 MB of goroutine stack, `JSON.stringify` of nested
+arrays stops with `InternalError: stack overflow` at every depth in about
+160 ms, and every nested parse form (`!`, `typeof`, `void`, `a=`, `x=>`,
+`?:`, spread, `new`, calls, members, `if`, `while`, templates) throws.
+
+Compiling quickjs.c takes 4.6 s instead of 4.2 s with the analysis, about
+9% more, and 8% more memory.
+
+### Soundness
+
+- A converted variable is never read as a uintptr: the identifier handler
+  returns the new mode, and converting it to any value mode is an internal
+  error reported at compile time, not a silent conversion. The analysis
+  therefore only has to agree with the emitter on which uses are safe; the
+  `--goptr=all` run of the whole corpus is what checks that agreement.
+- A pointer value derived from a converted variable stays an
+  `unsafe.Pointer` in every temporary too: the temporaries for `(*p)++`,
+  `*p += x` and similar are typed `unsafe.Pointer`.
+- Go's escape analysis sees the same facts: a converted parameter is only
+  dereferenced, compared, or passed to another such parameter, so it does
+  not leak and the caller's local stays on the stack (libquickjs: 0 "moved to
+  heap", see below).
+
+### Numbers (libquickjs, linux/amd64)
+
+Regenerated from libquickjs ba53053 in a scratch clone with ccgo d5de9df
+plus this change:
+
+- Functions with a TLS frame: 989 without either step, 576 after step 1
+  (measured by the libquickjs session on 2026-10-21), 346 after step 2, of
+  1893 in libquickjs; internal/run-test262: 867 -> 488 -> 277.
+- 240 functions take at least one `unsafe.Pointer` parameter, 44 of them
+  through a wrapper: the exported `JS_ToInt32Sat`, `JS_ToFloat64`,
+  `JS_ToCStringLen2`, `JS_NewCFunctionData`, `js_realloc2`, ... and the
+  address-taken statics in the C function tables such as `js_array_push`,
+  `js_array_includes`, `js_regexp_exec`, which are also called directly with
+  `&local` arguments.
+- `go build -gcflags=-m`: 0 "moved to heap".
+- `go test -race -skip Test262 -run Test`: passes (76.9 s).
+
+Measured by the libquickjs session on 2026-10-22 on the same output, before
+the recursion fix, which only adds the one-slot frames:
+
+- The full suite with Test262 passes (179 s); Test262 stays at 58/83558
+  errors, none new. `-race` without Test262 passes, no checkptr report.
+- BenchmarkMicro, five alternating rounds, `-test.cpu 4`, medians: total
+  14,849.5 -> 14,590.8 ns (-1.7%, geomean -1.8%, 31 tests faster, 35
+  slower). `_JS_CallInternal` moved from a 32 mod 64 to a 0 mod 64 offset;
+  with a padding function restoring the base alignment the total is 14,877.0
+  (+0.2%, geomean +1.3%). The alignment alone is worth 2% of the total and
+  up to 13% on single tests, so the time effect of step 2 on libquickjs is
+  within the alignment noise.
+- Why so little: after step 1 the remaining frames cost about 8% of the run
+  (CPU profiles of 42 s). Step 2 removes 20% of the frame entries but mostly
+  cheap ones: `TLS.Alloc` 1.92 -> 1.72 s, `TLS.Free` 0.55 -> 0.42 s, the
+  defer machinery 1.47 -> 1.18 s, about 1.4% in all. The biggest remaining
+  frames belong to `js_array_cmp_generic` (18% of the Alloc entries) and
+  `JS_ToPrimitiveFree` (16%), which pass a local `argv` to `JS_Call`, a real
+  sink, then `JS_CallInternal`, `js_call_c_function` and
+  `JS_ToNumberHintFree`, where the address of a local reaches a converted
+  parameter through a ccgo-inlined header function (`JS_ToUint32` in
+  quickjs.h calls `JS_ToInt32`) and the local stays pinned: closing that gap
+  is worth about 1% more at most.
+
+The libquickjs session's read, shared here: step 2 is correct and passes
+everything, but its speedup on libquickjs is too small to measure. Other
+code with more pointer out-parameters to locals may gain more; whether the
+complexity is worth keeping is the user's call.
+
+### Hazards, checked against this change
+
+1. No `uintptr` outlives an expression: converted variables and the
+   temporaries derived from them are `unsafe.Pointer` typed.
+2. Sentinels: a constant other than NULL assigned to, passed as or compared
+   with a converted variable makes it a sink. A sentinel loaded from memory
+   into a converted variable is not detectable; the variable is then
+   dereferenced by the same function, so the C program would be in trouble
+   too.
+3. Pointers outside the object: `&v[i]` with a non-constant index and
+   arithmetic on `&v` or on a decaying array with a non-constant offset keep
+   the old path, which pins v. Arithmetic on a converted parameter, which points to the caller's
+   object, is the C program's responsibility as before.
+4. Alignment: unchanged, the memory is the same.
+5. Zeroing: unchanged, these variables were Go locals whenever nothing pinned
+   them.
+6. The stack limit: see "Recursion stays bounded" above. Where a cycle keeps
+   a frame in another function than before, the depth at the limit changes
+   but stays bounded; the libquickjs session re-measures.
+7. setjmp: a converted parameter or local is a Go local like any other; the
+   guarded region runs in a closure, which Go handles.
+
+### Noted, not changed
+
+- libc `memset`/`memcpy`/`memmove`/`memcmp` on Go pointers (the second
+  smaller item) would make `fill(S *s)`-style callees convertible; today any
+  libc call on a derived pointer is a sink.
+- A `setjmp` region in ccgo returns the function's zero result after the
+  longjmp instead of continuing after the `if`: `withjmp` in the scratch test
+  returned 0 where gcc returns 10, with `--goptr=off` as well. Pre-existing,
+  see `../../docs/handoffs/setjmp-recover-handoff.md`.

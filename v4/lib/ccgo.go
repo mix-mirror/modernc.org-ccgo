@@ -123,34 +123,35 @@ type Task struct {
 
 	intSize int
 
-	E                            bool // -E
-	absolutePaths                bool // -absolute-paths
-	ansi                         bool // -ansi
-	c                            bool // -c
-	debugLinkerSave              bool // -debug-linker-save, causes pre type checking save of the linker result.
-	emitFuncAliases              bool // -emit-func-aliases
-	evalAllMacros                bool // -eval-all-macros
-	freeStanding                 bool // -ffreestanding
-	fullPaths                    bool // -full-paths
-	header                       bool // -header
-	ignoreAsmErrors              bool // -ignore-asm-errors
-	ignoreLinkErrors             bool // -ignore-link-errors
-	ignoreStaticAsserts          bool // -ignore-static-asserts
-	ignoreNegativeShiftAmounts   bool // -ignore-negative-shift-amounts
-	ignoreUnsupportedAligment    bool // -ignore-unsupported-alignment
-	ignoreUnsupportedAtomicSizes bool // -ignore-unsupported-atomic-sizes
-	ignoreVectorFunctions        bool // -ignore-vector-functions
-	isExeced                     bool // -exec ...
-	keepObjectFiles              bool // -keep-object-files
-	keepStrings                  bool // -keep-strings
-	m32                          bool // -m32
-	m64                          bool // -m64
-	noBuiltin                    bool // -fno-builtin
-	noMainMinimize               bool // -no-main-minimize
-	noObjFmt                     bool // -no-object-file-format
-	nostdinc                     bool // -nostdinc
-	nostdlib                     bool // -nostdlib
-	opt0                         bool // -O0
+	E                            bool   // -E
+	absolutePaths                bool   // -absolute-paths
+	ansi                         bool   // -ansi
+	c                            bool   // -c
+	debugLinkerSave              bool   // -debug-linker-save, causes pre type checking save of the linker result.
+	emitFuncAliases              bool   // -emit-func-aliases
+	evalAllMacros                bool   // -eval-all-macros
+	freeStanding                 bool   // -ffreestanding
+	fullPaths                    bool   // -full-paths
+	goPtr                        string // --goptr=on|off|all, see goptr.go
+	header                       bool   // -header
+	ignoreAsmErrors              bool   // -ignore-asm-errors
+	ignoreLinkErrors             bool   // -ignore-link-errors
+	ignoreStaticAsserts          bool   // -ignore-static-asserts
+	ignoreNegativeShiftAmounts   bool   // -ignore-negative-shift-amounts
+	ignoreUnsupportedAligment    bool   // -ignore-unsupported-alignment
+	ignoreUnsupportedAtomicSizes bool   // -ignore-unsupported-atomic-sizes
+	ignoreVectorFunctions        bool   // -ignore-vector-functions
+	isExeced                     bool   // -exec ...
+	keepObjectFiles              bool   // -keep-object-files
+	keepStrings                  bool   // -keep-strings
+	m32                          bool   // -m32
+	m64                          bool   // -m64
+	noBuiltin                    bool   // -fno-builtin
+	noMainMinimize               bool   // -no-main-minimize
+	noObjFmt                     bool   // -no-object-file-format
+	nostdinc                     bool   // -nostdinc
+	nostdlib                     bool   // -nostdlib
+	opt0                         bool   // -O0
 	packageNameSet               bool
 	pedantic                     bool // -pedantic
 	pedanticErrros               bool // -pedantic-errors
@@ -244,6 +245,7 @@ func (t *Task) main() (err error) {
 
 	// Defaults
 	t.prefixField = "F"
+	t.goPtr = goPtrDefault
 
 	set := opt.NewSet()
 	set.Arg("-cpp", true, func(arg, val string) error { t.cpp = strings.TrimSpace(val); return nil })
@@ -323,6 +325,17 @@ func (t *Task) main() (err error) {
 		t.std = fmt.Sprintf("%s=%s", arg, val)
 		if val == "c90" {
 			t.strictISOMode = true
+		}
+		return nil
+	})
+	set.OptionalArg("-goptr", func(arg, val string) error {
+		switch val {
+		case "", "on":
+			t.goPtr = "on"
+		case "off", "all":
+			t.goPtr = val
+		default:
+			return errorf("invalid %s value: %q, use on, off or all", arg, val)
 		}
 		return nil
 	})

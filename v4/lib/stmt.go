@@ -255,6 +255,12 @@ func (c *ctx) compoundStatement(w writer, n *cc.CompoundStatement, fnBlock bool,
 				}
 			}
 			w.w("%s%s", sep(n.Token), c.posComment(n))
+		case c.goPtr != nil && c.goPtr.lostCand[c.f.d]:
+			// The conversion may have removed the last frame of a recursive
+			// cycle here: a marker, resolved into a frame or nothing once
+			// the unit is emitted, see goPtrFrames.
+			w.w("%s", c.goPtrFrameMarker(c.f.d))
+			w.w("%s%s", strings.TrimSpace(sep(n.Token)), c.posComment(n))
 		default:
 			w.w("%s%s", strings.TrimSpace(sep(n.Token)), c.posComment(n))
 		}

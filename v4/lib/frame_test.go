@@ -39,7 +39,8 @@ unsigned long long inlined(V v) { return twice(v) + once(v); }
 int nested(void) { struct { V v; int x; } s; s.v.u.u = 0x100000002ull; s.x = 0; return s.v.u.i + s.x; }
 unsigned long long nestedunion(void) { N n; n.s.a = 1; n.s.b = 2; return n.u.u + (unsigned long long)n.s.b; }
 
-unsigned long long escapes(void) { V v; V *p = &v; p->u.u = 1; return v.u.u; }
+V *keep;
+unsigned long long escapes(void) { V v; V *p = &v; keep = p; p->u.u = 1; return v.u.u; }
 unsigned long long inlinedcall(void) { return once(mk(2)); }
 `
 	dir := t.TempDir()
@@ -73,7 +74,8 @@ unsigned long long inlinedcall(void) { return once(mk(2)); }
 		}
 		funcs[s[v[2]:v[3]]] = s[v[0]:end]
 	}
-	// escapes takes the address of v explicitly. inlinedcall passes a call
+	// escapes stores the address of v into a global, so the address must
+	// be a uintptr, see goptr.go. inlinedcall passes a call
 	// result to a parameter that is read once, so the parameter is replaced by
 	// the call expression, which is not addressable: it is spilled into the
 	// frame as before.
