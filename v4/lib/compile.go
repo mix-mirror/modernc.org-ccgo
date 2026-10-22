@@ -261,6 +261,7 @@ type ctx struct {
 	imports              map[string]string // import path: qualifier
 	initPatch            func(int64, *buf)
 	inlineFuncs          map[*cc.Declarator]*cc.FunctionDefinition
+	inlineFuncsByName    map[string]*cc.FunctionDefinition
 	inlineLabelSuffix    int
 	jsonMeta
 	macrosEmited  nameSet
@@ -307,6 +308,7 @@ func newCtx(task *Task, eh errHandler) *ctx {
 		fields:              map[fielder]*nameSpace{},
 		imports:             map[string]string{},
 		inlineFuncs:         map[*cc.Declarator]*cc.FunctionDefinition{},
+		inlineFuncsByName:   map[string]*cc.FunctionDefinition{},
 		maxAlign:            maxAlign,
 		task:                task,
 		verify:              map[cc.Type]struct{}{},
