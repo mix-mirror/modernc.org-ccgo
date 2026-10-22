@@ -1,14 +1,15 @@
 # Handoff: keep locals whose address does not escape out of the TLS frame
 
 Status: **steps 1 and 2 RESOLVED**, see "Resolution, step 1" (2026-10-21)
-and "Resolution, step 2" (2026-10-22) at the end. The smaller items are open.
+and "Resolution, step 2" (2026-10-22) at the end. The smaller items stay open
+as optional follow-ups; moved here from v4/lib on 2026-10-22.
 The gate, modernc.org/sqlite with SQLite 3.54.1, was released as v1.61.0 on
 2026-10-21.
 
 Measured 2026-10-19 on ccgo v4.37.0 output (modernc.org/libquickjs master
 865a39e, QuickJS 2026-06-04), Go 1.27.2, linux/amd64 (AMD Ryzen 9 3900X).
 Coordinated between the libquickjs and quickjs sessions. Related:
-`../../docs/handoffs/unsafeptr-handoff.md` (resolved in 6cf0225, released in v4.38.0) and `../../docs/handoffs/setjmp-recover-handoff.md`.
+`unsafeptr-handoff.md` (resolved in 6cf0225, released in v4.38.0) and `setjmp-recover-handoff.md`.
 
 ## TL;DR
 
@@ -236,7 +237,7 @@ Eligibility, as the classifier computes it (a greatest fixpoint):
    across the longjmp, which ccgo lowers to panic/recover in that function.
    Go locals do. If the lowering uses closures, captured locals escape to the
    heap, which is correct but slower. Please check against
-   `../../docs/handoffs/setjmp-recover-handoff.md`.
+   `setjmp-recover-handoff.md`.
 
 ## Reproducing
 
@@ -550,4 +551,4 @@ complexity is worth keeping is the user's call.
 - A `setjmp` region in ccgo returns the function's zero result after the
   longjmp instead of continuing after the `if`: `withjmp` in the scratch test
   returned 0 where gcc returns 10, with `--goptr=off` as well. Pre-existing,
-  see `../../docs/handoffs/setjmp-recover-handoff.md`.
+  see `setjmp-recover-handoff.md`.
