@@ -3360,6 +3360,11 @@ func (c *ctx) postfixExpressionSelect(w writer, n *cc.PostfixExpression, t cc.Ty
 	if u, ok := n.PostfixExpression.Type().(*cc.UnionType); !isCall && ok && u.Size() == f.Type().Size() {
 		switch mode {
 		case exprLvalue, exprDefault, exprSelect:
+			if !isVolatileOrAtomicExpr && c.isAutomaticLvalue(n.PostfixExpression) {
+				b.w("(*(*%s)(%s))", c.typ(n, f.Type()), unsafeAddr(c.expr(w, n.PostfixExpression, nil, exprSelect)))
+				return &b, n.Type(), mode
+			}
+
 			b.w("(*(*%s)(%s))", c.typ(n, f.Type()), unsafePointer(c.expr(w, n.PostfixExpression, n.PostfixExpression.Type().Pointer(), exprUintptr)))
 			return &b, n.Type(), mode
 		case exprUintptr:
@@ -3624,8 +3629,76 @@ func (c *ctx) postfixExpressionSelectUnionField(w writer, n *cc.PostfixExpressio
 	if off != 0 {
 		s = fmt.Sprintf("+%d", off)
 	}
+	if base := path[union].PostfixExpression; !c.isVolatileOrAtomicExpr(n0) && c.isAutomaticLvalue(base) {
+		b.w("(*(*%s)(%sunsafe.%sAdd(%s, %d)))", c.typ(n0.Token, f.Type()), tag(importQualifier), tag(preserve), unsafeAddr(c.expr(w, base, nil, exprSelect)), off)
+		return &b, f.Type(), mode
+	}
+
 	b.w("(*(*%s)(%s))", c.typ(n0.Token, f.Type()), unsafePointer(fmt.Sprintf("%s%s", c.topExpr(w, path[union].PostfixExpression, c.pvoid, exprUintptr), s)))
 	return &b, f.Type(), mode
+}
+
+// inlineParamNeedsVar reports whether the parameter d of a function being
+// inlined must be spilled into an autovar. Otherwise the parameter is read at
+// most once and its uses are replaced by the argument expression as written.
+func inlineParamNeedsVar(d *cc.Declarator) bool {
+	return d.ReadCount() > 1 || d.WriteCount() != 0 || d.AddressTaken()
+}
+
+// isAddressable reports whether n is a variable, or a chain of struct/union
+// member selections of one, such that &n is valid Go.
+//
+// A parameter of a function being inlined is either spilled into an autovar,
+// which is addressable, or replaced by the argument expression as written,
+// which is addressable only if the argument is.
+func (c *ctx) isAddressable(n cc.ExpressionNode) bool {
+	for {
+		n = c.unparen(n)
+		x, ok := n.(*cc.PostfixExpression)
+		if !ok || x.Case != cc.PostfixExpressionSelect {
+			break
+		}
+
+		n = x.PostfixExpression
+	}
+	d := c.declaratorOf(n)
+	if d == nil || d.IsTypename() || d.Type().Kind() == cc.Function {
+		return false
+	}
+
+	if c.f != nil {
+		for nfo := c.f.inlineInfo; nfo != nil; nfo = nfo.parent {
+			for i, v := range nfo.params {
+				if v.Declarator == d {
+					return i < len(nfo.addressableParams) && nfo.addressableParams[i]
+				}
+			}
+		}
+	}
+	return true
+}
+
+// isAutomaticLvalue reports whether n is an automatic variable, or a chain of
+// struct/union member selections of one, such that &n is valid Go. A member
+// of such a variable can then be accessed through unsafe.Pointer(&n) within
+// one expression, which keeps the variable a Go local instead of pinning it
+// into the TLS frame.
+func (c *ctx) isAutomaticLvalue(n cc.ExpressionNode) bool {
+	if !c.isAddressable(n) {
+		return false
+	}
+
+	for {
+		n = c.unparen(n)
+		x, ok := n.(*cc.PostfixExpression)
+		if !ok || x.Case != cc.PostfixExpressionSelect {
+			break
+		}
+
+		n = x.PostfixExpression
+	}
+	d := c.declaratorOf(n)
+	return d != nil && d.StorageDuration() == cc.Automatic
 }
 
 func (c *ctx) collectParentFields(n cc.Node, f *cc.Field, in cc.Type) (r []*cc.Field, ok bool) {
@@ -4051,13 +4124,16 @@ func (c *ctx) postfixExpressionCall(w writer, n *cc.PostfixExpression, mode mode
 		for i, v := range params {
 			var rp string
 			switch d := v.Declarator; {
-			case d.ReadCount() > 1 || d.WriteCount() != 0 || d.AddressTaken():
+			case inlineParamNeedsVar(d):
 				rp = c.f.newAutovarType(v, v.Type())
 				w.w("%s = %s;", rp, xargs[i])
+				nfo.addressableParams = append(nfo.addressableParams, true)
 			case d.ReadCount() == 1:
 				rp = string(xargs[i].b)
+				nfo.addressableParams = append(nfo.addressableParams, c.isAddressable(args[i]))
 			case d.ReadCount() == 0:
 				w.w("%s;", c.discardStr2(args[i], xargs[i]))
+				nfo.addressableParams = append(nfo.addressableParams, false)
 			// case d.WriteCount() != 0 || d.AddressTaken() || d.ReadCount() > 1:
 			// 	panic(todo("%v:", n.Position()))
 			default:

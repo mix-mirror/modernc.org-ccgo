@@ -1,8 +1,8 @@
 # Handoff: keep locals whose address does not escape out of the TLS frame
 
-Status: **PROPOSAL, thinking phase.** Nothing changes in ccgo or libc until the
-new modernc.org/sqlite (3.54.1) is tagged (user, 2026-10-19). Asking for a
-second opinion now.
+Status: **step 1 RESOLVED** on 2026-10-21, see "Resolution, step 1" at the
+end. Step 2 and the smaller items are open. The gate, modernc.org/sqlite with
+SQLite 3.54.1, was released as v1.61.0 on 2026-10-21.
 
 Measured 2026-10-19 on ccgo v4.37.0 output (modernc.org/libquickjs master
 865a39e, QuickJS 2026-06-04), Go 1.27.2, linux/amd64 (AMD Ryzen 9 3900X).
@@ -256,3 +256,115 @@ method is short:
   `JS_FreeValue` temporary).
 - `bplocal`: the step 1 rewrite above, applied to the functions `bpclass`
   lists as local-only.
+
+## Resolution, step 1 (2026-10-21)
+
+Implemented in ccgo: `postfixExpressionSelect` and
+`postfixExpressionSelectUnionField` in expr.go, with `isAutomaticLvalue`,
+`isAddressable` and the `addressableParams` bookkeeping of `inlineInfo`.
+Test: `TestUnionMemberFrame` in frame_test.go. Steps 2 and the smaller items
+stay open.
+
+### What pinned the locals
+
+Not a missing escape analysis. ccgo already keeps a struct local as a Go
+variable and reads its members as Go fields. A union member it has to read
+through a pointer, since Go has no unions, and two of the three codegen paths
+for that read took the base variable's address as a `uintptr`
+(`c.expr(..., exprUintptr)`). Taking the address that way pins the variable
+into the TLS frame, whatever happens to the address afterwards:
+
+- a member whose size equals the union's: `v.u.ptr`, `v.u.float64`, `v.u.u64`
+  of a JSValue, musl's `isnan` union `__u.__i`;
+- a union member reached through a struct member chain
+  (`postfixExpressionSelectUnionField`).
+
+The third path, a member smaller than the union such as `v.u.int32`, already
+used `unsafe.Add(unsafe.Pointer(&v.Fu), off)` on the Go variable without
+pinning it. The two other paths use that form now whenever the base is an
+automatic variable or a member chain of one (`isAutomaticLvalue`). The
+address exists only inside the expression that dereferences it, which is what
+the Go unsafe rules allow, nothing is converted to `uintptr`, and the variable
+stays on the goroutine stack, so no cleanup is needed on any path, panics
+included. Every remaining frame keeps its defer.
+
+Covered: locals, by-value parameters, parameters of inlined functions
+(`JS_FreeValue`, `JS_DupValue`, ...). An inlined parameter that is read once
+and neither written nor address-taken is replaced by its argument expression
+as written; when that argument is not addressable, for example a call result,
+the parameter keeps the old spill into the caller's frame
+(`addressableParams`). Volatile and atomic accesses keep the old path.
+
+### Numbers (libquickjs, linux/amd64)
+
+Measured by the libquickjs session on 2026-10-21 (libquickjs ba53053, Go
+1.27.3), ccgo cfa1c20 against cfa1c20 plus this change:
+
+- Functions with a TLS frame: 988 -> 576 of 1893 in libquickjs, 866 -> 488 of
+  1700 in internal/run-test262.
+- The classifier of this document: local-only 414 functions (1122 slots) ->
+  2 (7 slots). The two left are the call-result spill described above
+  (`JS_GetActiveFunction(ctx).u` in js_object_constructor and
+  js_method_set_home_object). Interprocedural 306 -> 304, blocked 206 -> 205.
+- Frame entries in one BenchmarkMicro run: 1.383e9 -> 0.670e9 (-51.6%),
+  the whole local-only share. What is left: blocked 64%, interprocedural
+  (step 2) 29%, VaList-only 4.8%.
+- `go build -gcflags=-m`: 0 "moved to heap" before and after. Inlinable
+  functions 331 -> 364, none lost; the 412 inlining candidates that
+  disappear are the `.deferwrap1` closures of the removed frames.
+- `_JS_CallInternal` code 75121 -> 68391 bytes.
+- BenchmarkMicro, five alternating rounds per build, `-test.cpu 4`, quiet
+  machine: total 17,759.9 -> 14,762.8 ns (median, -16.9%, the ranges do not
+  overlap), geomean over the 66 tests 0.811 (-18.9%), every test faster by
+  median. `_JS_CallInternal` sits at the same 64-byte offset in both
+  binaries, so alignment does not skew the comparison.
+- The full libquickjs suite with Test262 passes (58/83558 errors, none new),
+  `-race` without Test262 passes, and internal/run-test262 was built from
+  the new output as well.
+
+### Answers to the questions above
+
+- `registerLocal` pinning every local of a function with a switch in a loop:
+  only with `--hot-switch <regexp>` (e469782, October 2025, no rationale
+  recorded), which nothing in the fleet passes. It never produced a libquickjs
+  frame.
+- The `ccgo.go:11` TODO about escape analysis above "address taken" is about
+  `&x` handed to a callee, that is step 2, not this.
+- Step 2, pointer-typed parameters becoming `unsafe.Pointer`: feasible, but it
+  belongs in the compiler, per translation unit and for static functions,
+  rather than in the linker. The fixpoint over the call graph needs the C
+  parameter types and the call sites, which the compiler has and the linker,
+  which sees Go text, does not. Exported functions keep their `uintptr` ABI
+  through a wrapper or a clone. Not started.
+- The smaller items (VaList-only frames in a closure, libc `mem*` on Go
+  pointers): not started.
+
+### Hazards, checked against this change
+
+1. No `uintptr` is formed: the address is `unsafe.Pointer(&v)` inside one
+   expression.
+2. Not applicable, no variable changes type.
+3. Offsets are constant member offsets inside the variable.
+4. Alignment: a Go local of a ccgo struct type keeps the C layout, and a
+   member read at its C offset is at least as aligned as Go requires for the
+   member type on every target.
+5. Zeroing: unchanged, these variables were Go locals before whenever no
+   member read pinned them.
+6. Stack limit: no crash anywhere, TestStackOverflow passes, and
+   nesting up to 10^6 levels ends in a JS exception in all nine parser cases.
+   The parser depths at the default limit are unchanged within +3. JS
+   recursion through accessors, bound functions, toString, generators,
+   proxies and replace callbacks loses one frame per level, so the same
+   MaxStackSlots=5000 allows deeper recursion: getter 1665 -> 2498 levels
+   with 4.5 -> 8.7 MB of goroutine stack, toString 1248 -> 1665 (2.4 -> 4.5
+   MB), proxy 999 -> 1249. Plain recursion, forEach, apply and JSON are
+   unchanged. The worst case at limit 10000 is 17.1 MB, far below Go's 1 GB
+   (250 MB on 32-bit). An observable change: libquickjs may retune
+   MaxStackSlots.
+7. setjmp: Go locals survive panic/recover; the setjmp lowering is unchanged.
+
+### Noted, not changed
+
+- `(c ? a : b).u.x` and `(a = b).u.x`, a union member of a conditional or an
+  assignment expression, fail with a TODO (`"ccv1" from=V struct 16
+  exprUintptr -> to=pointer to V`) on master too. Unrelated to frames.

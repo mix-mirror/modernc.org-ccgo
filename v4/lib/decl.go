@@ -57,6 +57,7 @@ type flowCtx struct {
 func (c *flowCtx) new(stmt scoper) *flowCtx { return &flowCtx{parent: c, stmt: stmt} }
 
 type inlineInfo struct {
+	addressableParams []bool // &replacedParams[i] is valid Go
 	args              []*buf
 	exit              string
 	fd                *cc.FunctionDefinition
