@@ -490,28 +490,33 @@ func (c *ctx) compile(ifn, ofn string) (err error) {
 	if c.task.emitFuncAliases {
 		c.emitFunctionAliases()
 	}
-	for len(c.defineTaggedStructs) != 0 {
-		var a []string
-		for k := range c.defineTaggedStructs {
-			a = append(a, k)
+	// The type checks may refer to tagged types, so they must come before the types are defined.
+	c.verifyTypes()
+	// A union may refer to a tagged struct that is not defined yet, and the other way round.
+	for len(c.defineTaggedStructs) != 0 || len(c.defineTaggedUnions) != 0 {
+		for len(c.defineTaggedStructs) != 0 {
+			var a []string
+			for k := range c.defineTaggedStructs {
+				a = append(a, k)
+			}
+			sort.Strings(a)
+			for _, k := range a {
+				t := c.defineTaggedStructs[k]
+				c.defineStructType(c, "\n\n", nil, t)
+				delete(c.defineTaggedStructs, k)
+			}
 		}
-		sort.Strings(a)
-		for _, k := range a {
-			t := c.defineTaggedStructs[k]
-			c.defineStructType(c, "\n\n", nil, t)
-			delete(c.defineTaggedStructs, k)
-		}
-	}
-	for len(c.defineTaggedUnions) != 0 {
-		var a []string
-		for k := range c.defineTaggedUnions {
-			a = append(a, k)
-		}
-		sort.Strings(a)
-		for _, k := range a {
-			t := c.defineTaggedUnions[k]
-			c.defineUnionType(c, "\n\n", nil, t)
-			delete(c.defineTaggedUnions, k)
+		for len(c.defineTaggedUnions) != 0 {
+			var a []string
+			for k := range c.defineTaggedUnions {
+				a = append(a, k)
+			}
+			sort.Strings(a)
+			for _, k := range a {
+				t := c.defineTaggedUnions[k]
+				c.defineUnionType(c, "\n\n", nil, t)
+				delete(c.defineTaggedUnions, k)
+			}
 		}
 	}
 	// Defining the structs and unions above may have referred to tagged
@@ -529,7 +534,6 @@ func (c *ctx) compile(ifn, ofn string) (err error) {
 			delete(c.defineTaggedEnums, k)
 		}
 	}
-	c.verifyTypes()
 	c.w("%s", sep(c.ast.EOF))
 	switch {
 	case c.hasMain && c.task.tlsQualifier != "":
