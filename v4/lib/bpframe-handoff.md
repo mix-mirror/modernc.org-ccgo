@@ -369,6 +369,11 @@ Measured by the libquickjs session on 2026-10-21 (libquickjs ba53053, Go
 - `(c ? a : b).u.x` and `(a = b).u.x`, a union member of a conditional or an
   assignment expression, fail with a TODO (`"ccv1" from=V struct 16
   exprUintptr -> to=pointer to V`) on master too. Unrelated to frames.
+  Fixed on 2026-10-22: the value of a call or a conditional expression is
+  copied into a slot of the frame when a member of it needs an address, see
+  `temporarySlot` and TestNonLvalueMember. The same slot used to be sized by
+  the requested pointer type, so `puts(f().name)` with a 40 byte `name`
+  overran it.
 
 ## Resolution, step 2 (2026-10-22)
 

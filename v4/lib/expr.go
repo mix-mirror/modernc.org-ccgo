@@ -3391,6 +3391,65 @@ func (c *ctx) postfixExpressionPSelect(w writer, n *cc.PostfixExpression, t cc.T
 }
 
 // PostfixExpression '.' IDENTIFIER
+// isCondExpr returns n as a conditional expression with a condition, or nil.
+func (c *ctx) isCondExpr(n cc.ExpressionNode) *cc.ConditionalExpression {
+	if x, ok := c.unparen(n).(*cc.ConditionalExpression); ok && x.Case == cc.ConditionalExpressionCond {
+		return x
+	}
+
+	return nil
+}
+
+// temporarySlot copies the value of n.PostfixExpression, a call or a
+// conditional expression, into a slot of the TLS frame and returns the offset
+// of the slot. The value of such an expression is not an lvalue and has no
+// address in Go, but a member of it can be indexed, passed to a function or be
+// a bit field. A store through the member modifies the copy, as in C it
+// modifies a temporary.
+func (c *ctx) temporarySlot(w writer, n *cc.PostfixExpression) (bp int64) {
+	if c.f == nil {
+		c.err(errorf("%v: TODO %s outside of a function", pos(n), cc.NodeSource(n)))
+		return 0
+	}
+
+	if c.f.fnResults == nil {
+		c.f.fnResults = map[cc.ExpressionNode]int64{}
+	}
+	t := n.PostfixExpression.Type()
+	switch c.pass {
+	case 1:
+		bp = roundup(c.f.tlsAllocs, bpAlign(t))
+		c.f.fnResults[n] = bp
+		c.f.tlsAllocs += t.Size()
+	case 2:
+		bp = c.f.fnResults[n]
+	}
+	slot := fmt.Sprintf("(*(*%s)(%s))", c.typ(n, t), unsafePointer(bpOff(bp)))
+	x := c.isCondExpr(n.PostfixExpression)
+	if x == nil {
+		w.w("%s = %s;", slot, c.expr(w, n.PostfixExpression, nil, exprDefault))
+		return bp
+	}
+
+	if x.LogicalOrExpression.Pure() {
+		switch val := x.LogicalOrExpression.Value(); {
+		case c.isNonZero(val):
+			w.w("%s = %s;", slot, c.topExpr(w, x.ExpressionList, t, exprDefault))
+			return bp
+		case c.isZero(val):
+			w.w("%s = %s;", slot, c.topExpr(w, x.ConditionalExpression, t, exprDefault))
+			return bp
+		}
+	}
+
+	w.w("if %s {", c.topExpr(w, x.LogicalOrExpression, nil, exprBool))
+	w.w("%s = %s;", slot, c.topExpr(w, x.ExpressionList, t, exprDefault))
+	w.w("} else {")
+	w.w("%s = %s;", slot, c.topExpr(w, x.ConditionalExpression, t, exprDefault))
+	w.w("};")
+	return bp
+}
+
 func (c *ctx) postfixExpressionSelect(w writer, n *cc.PostfixExpression, t cc.Type, mode mode) (r *buf, rt cc.Type, rmode mode) {
 	// defer func() {
 	// 	trc("%v: %q %s %v -> %q %s %v", n.Position(), cc.NodeSource(n), t, mode, r, rt, rmode)
@@ -3401,7 +3460,15 @@ func (c *ctx) postfixExpressionSelect(w writer, n *cc.PostfixExpression, t cc.Ty
 	isVolatileOrAtomicExpr := c.isVolatileOrAtomicExpr(n)
 	// trc("%v: %q %p %s %v vol %v, %v bf %v", n.Position(), cc.NodeSource(n), n, t, mode, isVolatileOrAtomicExpr, c.isVolatileOrAtomicExpr(n.PostfixExpression), f.IsBitfield())
 	// defer trc("%p RET", n)
+	isCall := c.isCall2(n.PostfixExpression)
+	isTemporary := isCall || c.isCondExpr(n.PostfixExpression) != nil
 	if f.IsBitfield() {
+		if isTemporary {
+			var p buf
+			p.w("%s", bpOff(c.temporarySlot(w, n)))
+			return c.bitField(w, n, &p, f, mode, isVolatileOrAtomicExpr)
+		}
+
 		return c.bitField(w, n, c.pin(n, c.expr(w, n.PostfixExpression, n.PostfixExpression.Type().Pointer(), exprUintptr)), f, mode, isVolatileOrAtomicExpr)
 	}
 
@@ -3416,26 +3483,12 @@ func (c *ctx) postfixExpressionSelect(w writer, n *cc.PostfixExpression, t cc.Ty
 		return b, rt, rmode
 	}
 
-	isCall := c.isCall2(n.PostfixExpression)
-	if isCall && mode == exprUintptr {
-		if c.f.fnResults == nil {
-			c.f.fnResults = map[cc.ExpressionNode]int64{}
-		}
-		var bp int64
-		switch c.pass {
-		case 1:
-			bp = roundup(c.f.tlsAllocs, bpAlign(t))
-			c.f.fnResults[n] = bp
-			c.f.tlsAllocs += t.Size()
-		case 2:
-			bp = c.f.fnResults[n]
-		}
-		w.w("(*(*%s)(%s)) = %s.%s%s;", c.typ(n, f.Type()), unsafePointer(bpOff(bp)), c.expr(w, n.PostfixExpression, nil, exprDefault), tag(field), c.fieldName(n.PostfixExpression.Type(), f))
-		b.w("(%s)", bpOff(bp))
+	if isTemporary && mode == exprUintptr {
+		b.w("(%s)", bpOff(c.temporarySlot(w, n)+f.Offset()))
 		return &b, c.pvoid, mode
 	}
 
-	if u, ok := n.PostfixExpression.Type().(*cc.UnionType); !isCall && ok && u.Size() == f.Type().Size() {
+	if u, ok := n.PostfixExpression.Type().(*cc.UnionType); !isTemporary && ok && u.Size() == f.Type().Size() {
 		switch mode {
 		case exprLvalue, exprDefault, exprSelect:
 			if !isVolatileOrAtomicExpr && c.isAutomaticLvalue(n.PostfixExpression) {
@@ -3454,6 +3507,30 @@ func (c *ctx) postfixExpressionSelect(w writer, n *cc.PostfixExpression, t cc.Ty
 
 	parentFields, unionOk := c.collectParentFields(n, f, n.PostfixExpression.Type())
 	if u, ok := n.PostfixExpression.Type().(*cc.UnionType); !unionOk || (ok && f != firstPositiveSizedField(u)) {
+		if isCall {
+			// The result of a call has no address in Go, see temporarySlot.
+			p := bpOff(c.temporarySlot(w, n) + f.Offset())
+			switch mode {
+			case exprLvalue, exprDefault, exprSelect:
+				rt, rmode = n.Type(), mode
+				b.w("(*(*%s)(%s))", c.typ(n, f.Type()), unsafePointer(p))
+			case exprCall:
+				rt, rmode = n.Type().(*cc.PointerType), exprUintptr
+				b.w("(*(*%s)(%s))", c.typ(n, f.Type()), unsafePointer(p))
+			case exprIndex:
+				switch x := n.Type().Undecay().(type) {
+				case *cc.ArrayType:
+					rt, rmode = n.Type(), mode
+					b.w("((*%s)(%s))", c.typ(n, f.Type()), unsafePointer(p))
+				default:
+					c.err(errorf("TODO %T", x))
+				}
+			default:
+				c.err(errorf("TODO %v", mode))
+			}
+			return &b, rt, rmode
+		}
+
 		switch mode {
 		case exprLvalue, exprDefault, exprSelect:
 			rt, rmode = n.Type(), mode
