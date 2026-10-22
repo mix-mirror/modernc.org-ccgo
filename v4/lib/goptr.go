@@ -190,7 +190,7 @@ func (c *ctx) analyzeGoPtr() {
 
 		g.fnDefs[d.Name()] = fd
 		g.fnOrder = append(g.fnOrder, fd)
-		if a := d.Type().Attributes(); a.AlwaysInline() || a.GNUInline() || d.IsInline() && c.isHeader(d) {
+		if c.isInlineFunc(d) {
 			g.inlined[fd] = true
 		}
 		if aliased[d.Name()] || !c.goPtrFnCandidate(fd) {
@@ -334,8 +334,7 @@ func (c *ctx) goPtrFnCandidate(fd *cc.FunctionDefinition) bool {
 	}
 
 	// Functions ccgo inlines, see externalDeclaration.
-	a := d.Type().Attributes()
-	if a.AlwaysInline() || a.GNUInline() || d.IsInline() && c.isHeader(d) {
+	if c.isInlineFunc(d) {
 		return false
 	}
 

@@ -399,11 +399,8 @@ func (c *ctx) externalDeclaration(w writer, n *cc.ExternalDeclaration) {
 		// the function to be inlined. If any uses of the function remain, they refer
 		// to the single copy in the library.
 
-		if d.Type().Attributes().AlwaysInline() ||
-			d.Type().Attributes().GNUInline() ||
-			d.IsInline() && c.isHeader(d) {
-			c.inlineFuncs[d] = n.FunctionDefinition
-			c.inlineFuncsByName[d.Name()] = n.FunctionDefinition
+		if c.isInlineFunc(d) {
+			c.registerInlineFunc(n.FunctionDefinition)
 			return
 		}
 
@@ -421,6 +418,23 @@ func (c *ctx) externalDeclaration(w writer, n *cc.ExternalDeclaration) {
 	default:
 		c.err(errorf("internal error %T %v", n, n.Case))
 	}
+}
+
+// isInlineFunc reports whether ccgo inlines the function defined by d
+// instead of emitting it.
+func (c *ctx) isInlineFunc(d *cc.Declarator) bool {
+	a := d.Type().Attributes()
+	return a.AlwaysInline() || a.GNUInline() || d.IsInline() && c.isHeader(d)
+}
+
+// registerInlineFunc records an inlined function under its declarator and
+// its name. A call can resolve to a prototype of the function instead of
+// its definition, and the definition can follow the caller, so compile
+// registers all of them before compiling any function body.
+func (c *ctx) registerInlineFunc(fd *cc.FunctionDefinition) {
+	d := fd.Declarator
+	c.inlineFuncs[d] = fd
+	c.inlineFuncsByName[d.Name()] = fd
 }
 
 func (c *ctx) isHeader(n cc.Node) bool {

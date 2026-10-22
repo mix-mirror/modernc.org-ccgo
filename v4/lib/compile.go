@@ -483,6 +483,11 @@ func (c *ctx) compile(ifn, ofn string) (err error) {
 	c.pvoid = c.ast.PVoid
 	c.ifn = ifn
 	c.analyzeGoPtr()
+	for n := c.ast.TranslationUnit; n != nil; n = n.TranslationUnit {
+		if x := n.ExternalDeclaration; x.Case == cc.ExternalDeclarationFuncDef && c.isInlineFunc(x.FunctionDefinition.Declarator) {
+			c.registerInlineFunc(x.FunctionDefinition)
+		}
+	}
 	c.prologue(c)
 	c.defines(c)
 
