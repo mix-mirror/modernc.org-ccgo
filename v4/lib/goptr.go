@@ -1293,6 +1293,20 @@ func (c *ctx) goPtrIsArrayLvalue(n cc.ExpressionNode) bool {
 	return false
 }
 
+// goPtrValue returns the value of n if n is a constant the emitter may use in
+// place of n. cc reports a value also for an expression with side effects
+// whose result is a constant, such as (f(), 0); using that value would drop
+// the call, so such an expression has no value here. The sentinel checks,
+// see goPtrNonZeroConst, keep using n.Value(): there a value only turns the
+// variable into a sink.
+func goPtrValue(n cc.ExpressionNode) cc.Value {
+	if n == nil || !n.Pure() {
+		return nil
+	}
+
+	return n.Value()
+}
+
 // goPtrIntConst returns the value of n if it is a non-negative integer
 // constant.
 func (c *ctx) goPtrIntConst(n cc.ExpressionNode) (int64, bool) {
@@ -1300,7 +1314,7 @@ func (c *ctx) goPtrIntConst(n cc.ExpressionNode) (int64, bool) {
 		return 0, false
 	}
 
-	switch x := n.Value().(type) {
+	switch x := goPtrValue(n).(type) {
 	case cc.Int64Value:
 		return int64(x), x >= 0
 	case cc.UInt64Value:
@@ -1331,7 +1345,7 @@ func (c *ctx) goPtrIsZeroConst(n cc.ExpressionNode) bool {
 		return false
 	}
 
-	switch x := n.Value().(type) {
+	switch x := goPtrValue(n).(type) {
 	case cc.Int64Value:
 		return x == 0
 	case cc.UInt64Value:
@@ -1376,7 +1390,7 @@ func (c *ctx) goPtrRootDecl(n cc.ExpressionNode) (*cc.Declarator, bool) {
 
 // goPtrIsIntConst reports whether n is an integer constant.
 func (c *ctx) goPtrIsIntConst(n cc.ExpressionNode) bool {
-	switch n.Value().(type) {
+	switch goPtrValue(n).(type) {
 	case cc.Int64Value, cc.UInt64Value:
 		return cc.IsIntegerType(n.Type())
 	}
@@ -1616,7 +1630,7 @@ func (c *ctx) goPtrOffset(w writer, pe, ie cc.ExpressionNode, neg bool) string {
 	if sz > 0 {
 		var k int64
 		ok := false
-		switch x := ie.Value().(type) {
+		switch x := goPtrValue(ie).(type) {
 		case cc.Int64Value:
 			k, ok = int64(x), true
 		case cc.UInt64Value:

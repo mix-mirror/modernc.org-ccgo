@@ -229,3 +229,89 @@ aaa
 		})
 	}
 }
+
+// TestGoPtrSideEffects checks that an operand whose value is a constant but
+// which has side effects, such as (f(), 0), is evaluated and not replaced by
+// its value: in a comparison with a Go pointer, as an offset or index of one,
+// assigned to one, and in the address of a local passed to a converted
+// parameter. Found by TestCSmith, seed 2631221827025167448.
+func TestGoPtrSideEffects(t *testing.T) {
+	const src = `
+#include <stdio.h>
+
+static int n;
+static int f(void) { return ++n; }
+
+static int cmp(int *p) { return (f(), (void *)0) != p; }
+static int cmp2(int *p) { return p == (f(), (int *)0); }
+static int off(int *p) { return *(p + (f(), 1)); }
+static int idx(int *p) { return p[(f(), 1)]; }
+static int neg(int *p) { int *q = p + 2; return *(q - (f(), 1)); }
+static int asg(int *p) { int *q = p; int r = *q; q = (f(), (int *)0); return r + (q == 0); }
+static int cpa(int *p) { int *q = p; q += (f(), 1); return *q; }
+static int cps(int *p) { int *q = p + 2; q -= (f(), 2); return *q; }
+static int deref(int *p) { return *p; }
+
+int main(void) {
+	int a[3] = {10, 20, 30};
+	int x = 5;
+	int arr[2] = {7, 8};
+	int r;
+
+	r = cmp(&x); printf("cmp %d %d\n", r, n);
+	r = cmp2(&x); printf("cmp2 %d %d\n", r, n);
+	r = off(a); printf("off %d %d\n", r, n);
+	r = idx(a); printf("idx %d %d\n", r, n);
+	r = neg(a); printf("neg %d %d\n", r, n);
+	r = asg(&x); printf("asg %d %d\n", r, n);
+	r = cpa(a); printf("cpa %d %d\n", r, n);
+	r = cps(a); printf("cps %d %d\n", r, n);
+	r = deref(&arr[(f(), 1)]); printf("root-index %d %d\n", r, n);
+	r = deref(arr + (f(), 1)); printf("root-offset %d %d\n", r, n);
+	r = deref(&a[0] + (f(), 2)); printf("root-addr-offset %d %d\n", r, n);
+	return 0;
+}
+`
+	// gcc -O0
+	const expected = `cmp 1 1
+cmp2 0 2
+off 20 3
+idx 20 4
+neg 20 5
+asg 6 6
+cpa 20 7
+cps 10 8
+root-index 8 9
+root-offset 8 10
+root-addr-offset 30 11
+`
+	dir := t.TempDir()
+	cfn := filepath.Join(dir, "main.c")
+	if err := os.WriteFile(cfn, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, mode := range []string{"on", "all", "off"} {
+		t.Run(mode, func(t *testing.T) {
+			ofn := filepath.Join(dir, "main_"+mode+".go")
+			var out bytes.Buffer
+			if err := NewTask(goos, goarch, []string{"ccgo", "--goptr=" + mode, "-o", ofn, cfn}, &out, &out, nil).Main(); err != nil {
+				t.Fatalf("%v\n%s", err, out.Bytes())
+			}
+
+			bin := filepath.Join(dir, "main_"+mode+enforceBinaryExt(""))
+			if shOut, err := shell(false, "go", "build", "-o", bin, ofn); err != nil {
+				t.Fatalf("%s\n%v", shOut, err)
+			}
+
+			shOut, err := shell(false, bin)
+			if err != nil {
+				t.Fatalf("%s\n%v", shOut, err)
+			}
+
+			if g, e := string(shOut), expected; g != e {
+				t.Fatalf("got\n%s\nexpected\n%s", g, e)
+			}
+		})
+	}
+}

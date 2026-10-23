@@ -958,6 +958,7 @@ func TestCSmith(t *testing.T) {
 		"--max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --bitfields -s 1701143130",
 		"--max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --bitfields -s 1714958724",
 		"--max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --bitfields -s 20004725738999789",
+		"--max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --bitfields -s 2631221827025167448",
 		"--max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --bitfields -s 2764862066367832004", //TODO darwin/arm64
 		"--max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --bitfields -s 3088696074888013",
 		"--max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --bitfields -s 3654957324",
