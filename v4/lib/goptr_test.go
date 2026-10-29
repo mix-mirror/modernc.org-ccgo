@@ -48,7 +48,7 @@ static V cp(V *v) { V r = *v; r.tag++; *v = r; return r; }
 /* alias locals, arithmetic, comparisons, increments */
 static int walk(int *p, int n) { int s = 0; int *e = p + n; while (p < e) { s += *p; p++; } for (int *q = e - 1; q >= e - n; q--) s += *q; p -= n; return s + *p; }
 static int cmp(const int *p, const int *q) { return p == q ? 1 : p < q ? 2 : p != NULL ? 3 : 0; }
-static int tricky(int *p, int *q, int k) { int a = (*p)++, b = ++*p, c = (*p += k), d = (*p -= 1), e = (k > 0 ? *p : *q), f = (*q = 7, *q + *p); *(char *)p = 1; return a + b + c + d + e + f + *(int *)(void *)q; }
+static int tricky(int *p, int *q, int k) { int a = (*p)++, b = ++*p, c = (*p += k), d = (*p -= 1), e = (k > 0 ? *p : *q), f = (*q = 7, *q + *p); for (int i = 0; i < (int)sizeof *p; i++) ((char *)p)[i] = 1; return a + b + c + d + e + f + *(int *)(void *)q; }
 static int mixed(S *s, int use) { int local = 11; int *p; if (use) p = &local; else p = &s->v.tag; *p += 1; return *p + local; }
 static int rec(int *p, int n) { if (n == 0) return *p; *p += n; return rec(p, n - 1); }
 static int vsum(int *out, int n, ...) { va_list ap; int s = 0; va_start(ap, n); for (int i = 0; i < n; i++) s += va_arg(ap, int); va_end(ap); *out = s; return s; }
@@ -79,7 +79,7 @@ static int plain(int n) { return n <= 0 ? 0 : plain(n - 1) + 1; }
 int main(void) {
 	int x = 10, y = 20, z, out;
 	long l;
-	V v = {3, {.i32 = 4}};
+	V v = {3, {.u64 = -1}};
 	S s = {{1, {.i32 = 2}}, {{1, 2, 3}, {4, 5, 6}}, "s"};
 	int arr[5] = {1, 2, 3, 4, 5};
 	int sk, sk2 = 0, sk3 = 5;
@@ -119,20 +119,21 @@ int main(void) {
 int cyc_b(int n);
 static inline int viainl(int *p, int n) { return *p + cyc_b(n); }
 `
-	// gcc -O0
+	// gcc -O0. The output must not depend on the byte order or on the size of
+	// long, it is the same on all targets.
 	const expected = `1 42
 0 42
 2 10
 2 12
 2 16
-11
+1
 6 12
 122 n
 108
 7 7 12
 31
 1 2 3 1
-285 1 7
+285 16843009 7
 24
 13 2
 11 11
