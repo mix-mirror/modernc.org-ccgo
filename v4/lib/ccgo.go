@@ -775,7 +775,7 @@ func (t *Task) arExtract(fn string) (r []string, err error) {
 		m[w] = struct{}{}
 	}
 	switch runtime.GOOS {
-	case "freebsd", "darwin", "openbsd", "windows":
+	case "freebsd", "darwin", "illumos", "openbsd", "windows":
 		fn, err := filepath.Abs(fn)
 		if err != nil {
 			return nil, errorf("%v", err)

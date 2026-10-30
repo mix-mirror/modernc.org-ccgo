@@ -130,6 +130,10 @@ int main() {
 			return fmt.Errorf("go get: %v\n%s", err, out)
 		}
 
+		if err := xwork(); err != nil {
+			return err
+		}
+
 		if out, err := exec.Command("go", "build", "-o", goBin, goFile).CombinedOutput(); err != nil {
 			return fmt.Errorf("go build: %v\n%s", err, out)
 		}

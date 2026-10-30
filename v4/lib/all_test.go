@@ -55,7 +55,7 @@ var (
 	oVet          = flag.Bool("xvet", false, "run go vet on transpiled Go files") //TODO default<-true once #45 is fixed
 	//TODO oRace         = flag.Bool("xrace", false, "execute transpiled Go files with -race") //TODO default<-true once #45 is fixed
 	oXTags = flag.String("xtags", "", "passed to go build of TestSQLite")
-	oXWork = flag.String("xwork", "", "TestExec will use a go.work file for packages in the CSV list")
+	oXWork = flag.String("xwork", "", "tests building transpiled code will use a go.work file for packages in the CSV list")
 	oGoPtr = flag.String("goptr", "", "the default of ccgo --goptr for every ccgo invocation: on, off or all")
 
 	cfs         fs.FS
@@ -314,6 +314,21 @@ func inDir(dir string, f func() error) (err error) {
 	}
 
 	return f()
+}
+
+// xwork adds a go.work file using the module in the current directory and the
+// packages in the -xwork CSV list, if any.
+func xwork() error {
+	if *oXWork == "" {
+		return nil
+	}
+
+	args := append([]string{"work", "init", "."}, strings.Split(*oXWork, ",")...)
+	if out, err := exec.Command("go", args...).CombinedOutput(); err != nil {
+		return fmt.Errorf("go work init: %v\n%s", err, out)
+	}
+
+	return nil
 }
 
 func shell(echo bool, cmd string, args ...string) ([]byte, error) {
