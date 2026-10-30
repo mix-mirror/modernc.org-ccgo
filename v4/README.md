@@ -57,3 +57,9 @@ Transpiled code converts `uintptr` C pointers to `unsafe.Pointer`, which the `un
 - `go test` never runs `unsafeptr`, its vet subset does not include it (see `go help test`).
 - `go vet ./...` vets only the packages of the current module, never its dependencies. Only a module that contains `ccgo` output itself sees the findings. Use `go vet -unsafeptr=false ./...` there and expect `unreachable code` findings as well.
 - gopls shows the same diagnostics in an editor. They are cosmetic.
+
+## `--compact-data`
+
+Replaces large const scalar array initializers with a compact `[N]uint64`
+literal cast through `unsafe.Pointer`. Optional threshold argument, default
+256 elements.
