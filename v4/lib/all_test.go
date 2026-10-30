@@ -104,6 +104,37 @@ func (f *overlayFS) Open(name string) (fs.File, error) {
 	return f.fs.Open(name)
 }
 
+// ReadDir merges the directory entries of both filesystems. Entries from
+// the overlay replace entries with the same name in the base, matching what
+// Open does for regular files. fs.ReadDir requires the result to be sorted
+// by name.
+func (f *overlayFS) ReadDir(name string) ([]fs.DirEntry, error) {
+	entries := map[string]fs.DirEntry{}
+
+	baseEntries, baseErr := fs.ReadDir(f.fs, name)
+	overEntries, overErr := fs.ReadDir(f.over, name)
+
+	if baseErr != nil && overErr != nil {
+		return nil, baseErr
+	}
+
+	for _, e := range baseEntries {
+		entries[e.Name()] = e
+	}
+
+	for _, e := range overEntries {
+		entries[e.Name()] = e
+	}
+
+	r := make([]fs.DirEntry, 0, len(entries))
+	for _, e := range entries {
+		r = append(r, e)
+	}
+
+ sort.Slice(r, func(i, j int) bool { return r[i].Name() < r[j].Name() })
+ return r, nil
+}
+
 func TestMain(m *testing.M) {
 	isTesting = true
 	testWD, err := filepath.Abs("testdata")
