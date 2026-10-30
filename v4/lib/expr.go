@@ -1138,6 +1138,10 @@ func (c *ctx) isSafeZero(n cc.ExpressionNode) bool {
 	return c.isZero(n.Value()) && c.canIgnore(n)
 }
 
+// isZero reports whether v is a known value whose representation is all zero
+// bits, which zero-initializer elision relies on. -0.0 compares equal to zero
+// but is not zero bits, so it is not zero here; the callers testing a
+// condition then leave it to run time.
 func (c *ctx) isZero(v cc.Value) bool {
 	if v == nil || v == cc.Unknown {
 		return false
@@ -1149,17 +1153,17 @@ func (c *ctx) isZero(v cc.Value) bool {
 	case cc.UInt64Value:
 		return x == 0
 	case cc.Float64Value:
-		return x == 0
+		return math.Float64bits(float64(x)) == 0
 	case *cc.ZeroValue:
 		return true
 	case cc.Complex128Value:
-		return x == 0
+		return math.Float64bits(real(x)) == 0 && math.Float64bits(imag(x)) == 0
 	case cc.Complex64Value:
-		return x == 0
+		return math.Float32bits(real(x)) == 0 && math.Float32bits(imag(x)) == 0
 	case *cc.ComplexLongDoubleValue:
 		return c.isZero(x.Re) && c.isZero(x.Im)
 	case *cc.LongDoubleValue:
-		return !(*big.Float)(x).IsInf() && (*big.Float)(x).Sign() == 0
+		return !(*big.Float)(x).IsInf() && (*big.Float)(x).Sign() == 0 && !(*big.Float)(x).Signbit()
 	case *cc.UnknownValue:
 		return false
 	case cc.StringValue:
