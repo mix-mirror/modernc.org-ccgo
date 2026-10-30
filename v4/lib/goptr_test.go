@@ -235,7 +235,9 @@ aaa
 // which has side effects, such as (f(), 0), is evaluated and not replaced by
 // its value: in a comparison with a Go pointer, as an offset or index of one,
 // assigned to one, and in the address of a local passed to a converted
-// parameter. Found by TestCSmith, seed 2631221827025167448.
+// parameter. Found by TestCSmith, seed 2631221827025167448. cmp3 and cmp4
+// have the side effect after a pure first operand of the comma, which cc
+// before v4.30.5 reported as pure, seed 8898061851462809438.
 func TestGoPtrSideEffects(t *testing.T) {
 	const src = `
 #include <stdio.h>
@@ -245,6 +247,8 @@ static int f(void) { return ++n; }
 
 static int cmp(int *p) { return (f(), (void *)0) != p; }
 static int cmp2(int *p) { return p == (f(), (int *)0); }
+static int cmp3(int *p) { return ((n, f()), (void *)0) != p; }
+static int cmp4(int *p) { return p == (n, (f(), (int *)0)); }
 static int off(int *p) { return *(p + (f(), 1)); }
 static int idx(int *p) { return p[(f(), 1)]; }
 static int neg(int *p) { int *q = p + 2; return *(q - (f(), 1)); }
@@ -270,6 +274,8 @@ int main(void) {
 	r = deref(&arr[(f(), 1)]); printf("root-index %d %d\n", r, n);
 	r = deref(arr + (f(), 1)); printf("root-offset %d %d\n", r, n);
 	r = deref(&a[0] + (f(), 2)); printf("root-addr-offset %d %d\n", r, n);
+	r = cmp3(&x); printf("cmp3 %d %d\n", r, n);
+	r = cmp4(&x); printf("cmp4 %d %d\n", r, n);
 	return 0;
 }
 `
@@ -285,6 +291,8 @@ cps 10 8
 root-index 8 9
 root-offset 8 10
 root-addr-offset 30 11
+cmp3 1 12
+cmp4 0 13
 `
 	dir := t.TempDir()
 	cfn := filepath.Join(dir, "main.c")
