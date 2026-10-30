@@ -481,6 +481,13 @@ func testExec1(t *testing.T, p *parallel, root, path string, execute bool, g *go
 	}()
 
 	fullPath := filepath.ToSlash(filepath.Join(root, path))
+
+	// Corpus entries under ccgo/compact-data run ccgo with --compact-data so
+	// the compact initializer path is compared against the C output.
+	var extraArgs []string
+	if strings.HasSuffix(fullPath, "/ccgo/bug/big-table.c") {
+		extraArgs = append(extraArgs, "--compact-data")
+	}
 	var cCompilerFailed, cExecFailed bool
 	ofn := fmt.Sprint(id)
 	bin := "cbin_" + enforceBinaryExt(ofn)
@@ -527,7 +534,7 @@ func testExec1(t *testing.T, p *parallel, root, path string, execute bool, g *go
 		err = NewTask(
 			goos,
 			goarch,
-			[]string{
+			append([]string{
 				"ccgo",
 
 				"-c",
@@ -538,13 +545,13 @@ func testExec1(t *testing.T, p *parallel, root, path string, execute bool, g *go
 				"-keep-object-files",
 				// "--libc", *oLibc,
 				path,
-			},
+			}, extraArgs...),
 			&out, &out, nil).Main()
 	default:
 		err = NewTask(
 			goos,
 			goarch,
-			[]string{
+			append([]string{
 				"ccgo",
 
 				"-o", ofn,
@@ -557,7 +564,7 @@ func testExec1(t *testing.T, p *parallel, root, path string, execute bool, g *go
 				"-full-paths",
 				// "--libc", *oLibc,
 				path,
-			},
+			}, extraArgs...),
 			&out, &out, nil).Main()
 	}
 	if err != nil {
