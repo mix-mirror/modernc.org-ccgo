@@ -1071,8 +1071,14 @@ var _ %s.Pointer
 			return errorf("loading %s: %v", object.id, err)
 		}
 
-		for linkName, specs := range vars {
-			for _, spec := range specs {
+		// Sorted, as printing a spec adds its string literals to the text segment.
+		linkNames = linkNames[:0]
+		for linkName := range vars {
+			linkNames = append(linkNames, linkName)
+		}
+		sort.Strings(linkNames)
+		for _, linkName := range linkNames {
+			for _, spec := range vars[linkName] {
 				sep := seps[spec]
 				switch ex := l.externVars[linkName]; {
 				case ex != nil:
