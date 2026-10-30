@@ -830,11 +830,25 @@ func sourcesFor(cfg *cc.Config, fn string, t *Task) (r []cc.Source, err error) {
 	//
 	// If multiple -include options are given, the files are included in the order
 	// they appear on the command line.
-	paths := append([]string{"."}, t.include...)
+	//
+	// The working directory takes the place of the directory of the current file,
+	// the empty first element of cfg.IncludePaths.
+	dirs := []string{"."}
+	for _, v := range cfg.IncludePaths {
+		if v != "" {
+			dirs = append(dirs, v)
+		}
+	}
 next:
 	for _, v := range t.include {
-		for _, w := range paths {
-			path := filepath.Join(w, v)
+		paths := []string{v}
+		if !filepath.IsAbs(v) {
+			paths = paths[:0]
+			for _, w := range dirs {
+				paths = append(paths, filepath.Join(w, v))
+			}
+		}
+		for _, path := range paths {
 			fi, err := os.Stat(path)
 			if err != nil || !fi.Mode().IsRegular() {
 				continue
