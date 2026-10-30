@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"go/token"
 	"io"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -765,6 +766,10 @@ func (c *ctx) defines(w writer) {
 			w.w("%s%sconst %s%s = %v;", sep(m.Name, "\n"), c.posComment(m), tag(macro), m.Name.Src(), x)
 			c.macrosEmited.add(nm)
 		case cc.Float64Value:
+			if math.IsInf(float64(x), 0) || math.IsNaN(float64(x)) {
+				break // Not representable as a Go constant.
+			}
+
 			if s := fmt.Sprint(x); s == r {
 				w.w("%s%sconst %s%s = %s;", sep(m.Name, "\n"), c.posComment(m), tag(macro), m.Name.Src(), s)
 				c.macrosEmited.add(nm)
