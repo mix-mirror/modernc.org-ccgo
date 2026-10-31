@@ -154,19 +154,18 @@ type Task struct {
 	nostdlib                     bool   // -nostdlib
 	opt0                         bool   // -O0
 	packageNameSet               bool
-	pedantic                     bool // -pedantic
-	pedanticErrros               bool // -pedantic-errors
-	positions                    bool // -positions
-	prefixDefineSet              bool // --prefix-define <string>
-	pthread                      bool // -pthread
-	strictISOMode                bool // -ansi or stc=c90
-	unsignedEnums                bool // -unsigned-enums
-	verifyTypes                  bool // -verify-types
-	version                      bool // --version
-	winapiNoErrno                bool // --winapi-no-errno
-	doom                         bool // --doom
-
-	compactDataThreshold uint32 // --compact-data[=<n>]; 0 = off
+	pedantic                     bool   // -pedantic
+	pedanticErrros               bool   // -pedantic-errors
+	positions                    bool   // -positions
+	prefixDefineSet              bool   // --prefix-define <string>
+	pthread                      bool   // -pthread
+	strictISOMode                bool   // -ansi or stc=c90
+	unsignedEnums                bool   // -unsigned-enums
+	verifyTypes                  bool   // -verify-types
+	version                      bool   // --version
+	winapiNoErrno                bool   // --winapi-no-errno
+	doom                         bool   // --doom
+	compactDataThreshold         uint32 // --compact-data[=<n>]; 0 = off
 }
 
 // NewTask returns a newly created Task. args[0] is the command name.

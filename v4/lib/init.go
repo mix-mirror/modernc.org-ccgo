@@ -964,6 +964,10 @@ func (c *ctx) compactArrayInit(w writer, n cc.Node, a []initItem, t *cc.ArrayTyp
 		return nil
 	}
 
+	if c.isZeroInitializerSlice(a) {
+		return nil
+	}
+
 	// Verify compile-time constness of all elements.
 	for _, v := range a {
 		if v.in.AssignmentExpression != nil && v.in.AssignmentExpression.Value() == cc.Unknown {
@@ -982,7 +986,7 @@ func (c *ctx) compactArrayInit(w writer, n cc.Node, a []initItem, t *cc.ArrayTyp
 			off -= off % esz
 
 			if v.in.AssignmentExpression == nil {
-				continue
+				return nil
 			}
 
 			if v.in.Len() != 1 {
@@ -1004,22 +1008,26 @@ func (c *ctx) compactArrayInit(w writer, n cc.Node, a []initItem, t *cc.ArrayTyp
 		}
 	}
 
-	// Emit as [N]uint64 literal with unsafe.Pointer cast.
+	// Emit the words as a package-level variable so the data stays static
+	// and main.init only copies a pointer, instead of building the literal
+	// with runtime.newobject and MOVQ stores at program start.
 	nWords := (totalBytes + 7) / 8
-	var b buf
-	b.w("(*(*%s)(%sunsafe.%sPointer(&[%d]%suint64{",
-		c.typ(n, t), tag(importQualifier), tag(preserve), nWords, tag(preserve))
-
+	nm := fmt.Sprintf("%s__ccgo_words_%d", tag(staticInternal), c.id())
+	w.w("\nvar %s = [%d]%suint64{", nm, nWords, tag(preserve))
 	for i := int64(0); i < nWords; i++ {
 		start := i * 8
 		var word [8]byte
 		copy(word[:], img[start:])
 		if i != 0 {
-			b.w(", ")
+			w.w(", ")
 		}
-		b.w("%#x", bo.Uint64(word[:]))
+		w.w("%#x", bo.Uint64(word[:]))
 	}
-	b.w("})))")
+	w.w("}\n")
+
+	var b buf
+	b.w("(*(*%s)(%sunsafe.%sPointer(&%s)))",
+		c.typ(n, t), tag(importQualifier), tag(preserve), nm)
 	return &b
 }
 
