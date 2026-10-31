@@ -16,7 +16,9 @@ import (
 // expression and a compound literal. The member can be a union member, an
 // array that is indexed or passed to a function, a bit field or a member of an
 // anonymous union, and a store through it modifies a temporary. The expected
-// output is that of gcc.
+// output is that of gcc. It must not depend on the byte order: an int member of
+// the anonymous union is read only where it was stored or where both halves of
+// the long long are equal.
 func TestNonLvalueMember(t *testing.T) {
 	const src = `
 #include <stdio.h>
@@ -28,12 +30,12 @@ typedef struct { int tag; union { long long l; int i; }; unsigned bf : 3; unsign
 typedef struct { int tag; char name[40]; } N;
 
 static V a = {1, {.u = 5}, "ab"}, b = {2, {.u = 7}, "cd"};
-static A a2 = {1, {.l = 77}, 5, 9}, b2 = {2, {.l = 88}, 6, 10};
+static A a2 = {1, {.l = 77}, 5, 9}, b2 = {2, {.i = 88}, 6, 10};
 static int c = 1;
 
 static V f(void) { V r = {3, {.u = 9}, "ef"}; return r; }
 static V g(void) { V r = {4, {.u = 11}, "gh"}; return r; }
-static A h(void) { A r = {3, {.l = 99}, 7, 11}; return r; }
+static A h(void) { A r = {3, {.l = 0x6300000063LL}, 7, 11}; return r; }
 static N nm(void) { N r = {1, "0123456789012345678901234567890123456789"}; return r; }
 
 int main(void) {
@@ -53,7 +55,7 @@ int main(void) {
 
 	// call: the member copied into the frame must not overrun the slot
 	printf("%d %lld %c %d\n", f().tag, f().u.u, g().z[0], (int)strlen(g().z));
-	printf("%lld %d %u %u\n", h().l, h().i, h().bf, h().bf2);
+	printf("%llx %d %u %u\n", h().l, h().i, h().bf, h().bf2);
 	puts(nm().name);
 	printf("%llx %llx %llx\n", *p1, *p2, *p3);
 
@@ -72,7 +74,7 @@ int main(void) {
 97 99
 2
 3 9 g 2
-99 99 7 11
+6300000063 99 7 11
 0123456789012345678901234567890123456789
 1111111111111111 2222222222222222 3333333333333333
 1 7 d
