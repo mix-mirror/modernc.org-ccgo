@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	stderrors "errors"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -102,6 +103,46 @@ func (f *overlayFS) Open(name string) (fs.File, error) {
 	}
 
 	return f.fs.Open(name)
+}
+
+// ReadDir merges the directory entries of both filesystems. Entries from
+// the overlay replace entries with the same name in the base, matching what
+// Open does for regular files. fs.ReadDir requires the result to be sorted
+// by name.
+func (f *overlayFS) ReadDir(name string) ([]fs.DirEntry, error) {
+	entries := map[string]fs.DirEntry{}
+
+	baseEntries, baseErr := fs.ReadDir(f.fs, name)
+	overEntries, overErr := fs.ReadDir(f.over, name)
+
+	// A missing directory on one side is expected: the overlay is sparse.
+	// Any other failure means the listing is incomplete and must reach the
+	// caller. The directory does not exist only when both sides lack it.
+	if baseErr != nil && !stderrors.Is(baseErr, fs.ErrNotExist) {
+		return nil, baseErr
+	}
+	if overErr != nil && !stderrors.Is(overErr, fs.ErrNotExist) {
+		return nil, overErr
+	}
+	if baseErr != nil && overErr != nil {
+		return nil, fs.ErrNotExist
+	}
+
+	for _, e := range baseEntries {
+		entries[e.Name()] = e
+	}
+
+	for _, e := range overEntries {
+		entries[e.Name()] = e
+	}
+
+	r := make([]fs.DirEntry, 0, len(entries))
+	for _, e := range entries {
+		r = append(r, e)
+	}
+
+	sort.Slice(r, func(i, j int) bool { return r[i].Name() < r[j].Name() })
+	return r, nil
 }
 
 func TestMain(m *testing.M) {
