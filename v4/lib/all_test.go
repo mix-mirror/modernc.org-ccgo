@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	stderrors "errors"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -114,8 +115,17 @@ func (f *overlayFS) ReadDir(name string) ([]fs.DirEntry, error) {
 	baseEntries, baseErr := fs.ReadDir(f.fs, name)
 	overEntries, overErr := fs.ReadDir(f.over, name)
 
-	if baseErr != nil && overErr != nil {
+	// A missing directory on one side is expected: the overlay is sparse.
+	// Any other failure means the listing is incomplete and must reach the
+	// caller. The directory does not exist only when both sides lack it.
+	if baseErr != nil && !stderrors.Is(baseErr, fs.ErrNotExist) {
 		return nil, baseErr
+	}
+	if overErr != nil && !stderrors.Is(overErr, fs.ErrNotExist) {
+		return nil, overErr
+	}
+	if baseErr != nil && overErr != nil {
+		return nil, fs.ErrNotExist
 	}
 
 	for _, e := range baseEntries {
@@ -131,8 +141,8 @@ func (f *overlayFS) ReadDir(name string) ([]fs.DirEntry, error) {
 		r = append(r, e)
 	}
 
- sort.Slice(r, func(i, j int) bool { return r[i].Name() < r[j].Name() })
- return r, nil
+	sort.Slice(r, func(i, j int) bool { return r[i].Name() < r[j].Name() })
+	return r, nil
 }
 
 func TestMain(m *testing.M) {
