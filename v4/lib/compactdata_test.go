@@ -5,6 +5,7 @@
 package ccgo // import "modernc.org/ccgo/v4/lib"
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,6 +18,11 @@ import (
 // indexed literal. Element types cover signed and unsigned, negative values,
 // an enum and an array size that is not a multiple of 8 bytes, so a wrong
 // byte order in the packing changes the printed output.
+//
+// Three arrays stay literal, each for a different reason: small is below
+// the threshold, mut is not const, and sloc is a static local, whose words
+// variable would land in the function body while the array itself is
+// declared at package level.
 func TestCompactData(t *testing.T) {
 	const src = `
 #include <stdio.h>
@@ -40,6 +46,7 @@ const int small[3] = {1, 2, 3};
 int mut[13] = {-1, 2, -3, 4, -5, 6, -7, 8, -9, 10, -11, 12, -13};
 
 int main(void) {
+	static const short sloc[6] = {-6, -5, -4, -3, -2, -1};
 	int i;
 	for (i = 0; i < 13; i++) printf("%d ", sc[i]); printf("\n");
 	for (i = 0; i < 7; i++)  printf("%d ", sh[i]); printf("\n");
@@ -52,6 +59,7 @@ int main(void) {
 	for (i = 0; i < 5; i++)  printf("%d ", co[i]); printf("\n");
 	for (i = 0; i < 3; i++)  printf("%d ", small[i]); printf("\n");
 	for (i = 0; i < 13; i++) printf("%d ", mut[i]); printf("\n");
+	for (i = 0; i < 6; i++)  printf("%d ", sloc[i]); printf("\n");
 	return 0;
 }
 `
@@ -68,6 +76,7 @@ int main(void) {
 		"-3 7 11 -3 7 ",
 		"1 2 3 ",
 		"-1 2 -3 4 -5 6 -7 8 -9 10 -11 12 -13 ",
+		"-6 -5 -4 -3 -2 -1 ",
 	}, "\n") + "\n"
 
 	dir := t.TempDir()
@@ -79,7 +88,7 @@ int main(void) {
 	var out strings.Builder
 	// The threshold is small enough to compact every array above.
 	args := []string{"ccgo", "--compact-data=4", "-o", ofn, cfn}
-	if err := NewTask("linux", "amd64", args, &out, &out, nil).Main(); err != nil {
+	if err := NewTask(goos, goarch, args, &out, &out, nil).Main(); err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
 	}
 
@@ -88,16 +97,31 @@ int main(void) {
 		t.Fatal(err)
 	}
 	gen := string(b)
-	if !strings.Contains(gen, "__ccgo_words_") {
-		t.Fatalf("no static word array in the generated Go:\n%s", gen)
-	}
-	// No indexed literal should be left for the compacted arrays. `small`
-	// and `mut` stay literal, so at least one int literal must remain.
-	if !strings.Contains(gen, "[3]int32{") {
-		t.Errorf("the non-compacted small array lost its literal form")
+
+	// Every eligible array is initialized from a words variable.
+	for _, name := range []string{"sc", "sh", "in", "un", "ll", "fl", "db", "bo", "co"} {
+		pat := fmt.Sprintf("var %s = *(*[", name)
+		if !strings.Contains(gen, pat) {
+			t.Errorf("%s is not initialized from a words variable", name)
+		}
+		if !strings.Contains(gen, fmt.Sprintf("&__ccgo_words_")) {
+			t.Fatalf("no words variable in the generated Go")
+		}
 	}
 
-	bin := filepath.Join(dir, "main")
+	// small is below the threshold, mut is not const, sloc is a static
+	// local: none of them may be compacted, they keep their literal form.
+	for _, name := range []string{"small", "mut", "sloc"} {
+		pat := fmt.Sprintf("var %s = [", name)
+		if !strings.Contains(gen, pat) {
+			t.Errorf("%s lost its literal form", name)
+		}
+		if strings.Contains(gen, fmt.Sprintf("var %s = *(*[", name)) {
+			t.Errorf("%s was compacted but should not be", name)
+		}
+	}
+
+	bin := filepath.Join(dir, "main"+enforceBinaryExt(""))
 	if o, err := shell(false, "go", "build", "-o", bin, ofn); err != nil {
 		t.Fatalf("%v\n%s", err, o)
 	}

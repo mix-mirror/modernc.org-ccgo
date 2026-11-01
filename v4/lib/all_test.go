@@ -481,7 +481,6 @@ func testExec1(t *testing.T, p *parallel, root, path string, execute bool, g *go
 	}()
 
 	fullPath := filepath.ToSlash(filepath.Join(root, path))
-
 	var cCompilerFailed, cExecFailed bool
 	ofn := fmt.Sprint(id)
 	bin := "cbin_" + enforceBinaryExt(ofn)
