@@ -414,6 +414,10 @@ func (c *ctx) isZeroInitializerSlice(s []initItem) bool {
 }
 
 func (c *ctx) initializerArray(w writer, n cc.Node, a []initItem, t *cc.ArrayType, off0 int64) (r *buf) {
+	if b := c.compactArrayInit(w, n, a, t, off0); b != nil {
+		return b
+	}
+
 	var b buf
 	b.w("%s{", c.typ(n, t))
 	if c.isZeroInitializerSlice(a) {
@@ -924,6 +928,137 @@ func (c *ctx) compactUnionInit(n cc.Node, a []initItem, t *cc.UnionType, off0 in
 		b.w("%#x", v)
 	}
 	b.w("})))")
+	return &b
+}
+
+// compactArrayInit attempts to encode the array initializer as a compact byte
+// buffer embedded via [N]uint64 literal + unsafe.Pointer cast (same pattern as
+// compactUnionInit). Returns nil if ineligible, in which case the caller should
+// fall back to the normal indexed literal.
+func (c *ctx) compactArrayInit(w writer, n cc.Node, a []initItem, t *cc.ArrayType, off0 int64) *buf {
+	if c.task.compactDataThreshold == 0 {
+		return nil
+	}
+
+	if c.declBeingInitialized == nil || !c.declBeingInitialized.IsConst() {
+		return nil
+	}
+
+	// A static local array is initialized while a function body is being
+	// written, so the words variable would land in the function while the
+	// array itself is declared at package level. Leave those arrays alone
+	// until the words can be hoisted next to the declaration.
+	if c.f != nil {
+		return nil
+	}
+
+	// A static local array is initialized while a function body is being
+	// written, so the words variable would land in the function while the
+	// array itself is declared at package level. Leave those arrays alone
+	// until the words can be hoisted next to the declaration.
+	if c.f != nil {
+		return nil
+	}
+
+	// Must be a standalone array declaration, not a struct member or nested array.
+	if c.declBeingInitialized.Type().Kind() != cc.Array {
+		return nil
+	}
+
+	et := t.Elem()
+	esz := et.Size()
+	nElems := t.Len()
+	if nElems <= 0 || esz <= 0 {
+		return nil
+	}
+
+	if nElems < int64(c.task.compactDataThreshold) {
+		return nil
+	}
+
+	if !cc.IsArithmeticType(et) {
+		return nil
+	}
+
+	if c.isZeroInitializerSlice(a) {
+		return nil
+	}
+
+	// Verify compile-time constness of all elements.
+	for _, v := range a {
+		if v.in.AssignmentExpression != nil && v.in.AssignmentExpression.Value() == cc.Unknown {
+			return nil
+		}
+	}
+
+	bo := c.ast.ABI.ByteOrder
+	totalBytes := nElems * esz
+	img := make([]byte, totalBytes)
+
+	s := sortInitItems(a, func(n int64) int64 { n -= off0; return n - n%esz })
+	for _, vs := range s {
+		for _, v := range vs {
+			off := v.off - off0
+			off -= off % esz
+
+			if v.in.AssignmentExpression == nil {
+				return nil
+			}
+
+			if v.in.Len() != 1 {
+				return nil // Range initializer not yet supported.
+			}
+
+			vt := v.in.Type()
+			if vt == nil {
+				vt = et
+			}
+
+			if off+esz > totalBytes {
+				return nil
+			}
+
+			if !encodeScalarConst(img[off:off+esz], v.in.AssignmentExpression.Value(), vt, bo) {
+				return nil
+			}
+		}
+	}
+
+	// Emit the words as a package-level variable so the data stays static
+	// instead of building the literal with runtime.newobject and MOVQ
+	// stores at program start. The initializer still copies the whole
+	// array once (one memmove), so the data ends up in memory twice: the
+	// words in SNOPTRDATA and the variable in SNOPTRBSS.
+	nWords := (totalBytes + 7) / 8
+	// c.id() is the function's counter inside a function body, so a
+	// global array and a static local one would collide. Use a counter
+	// that is unique across the whole translation unit.
+	//
+	// Inside a function body the words variable is a local name, not a
+	// package-level static: tag it preserve so the linker keeps the name
+	// instead of looking it up in the package dictionary, where a local
+	// is not registered.
+	c.nextWordsID++
+	tagName := tag(staticInternal)
+	if c.f != nil {
+		tagName = tag(preserve)
+	}
+	nm := fmt.Sprintf("%s__ccgo_words_%d", tagName, c.nextWordsID)
+	w.w("\nvar %s = [%d]%suint64{", nm, nWords, tag(preserve))
+	for i := int64(0); i < nWords; i++ {
+		start := i * 8
+		var word [8]byte
+		copy(word[:], img[start:])
+		if i != 0 {
+			w.w(", ")
+		}
+		w.w("%#x", bo.Uint64(word[:]))
+	}
+	w.w("}\n")
+
+	var b buf
+	b.w("(*(*%s)(%sunsafe.%sPointer(&%s)))",
+		c.typ(n, t), tag(importQualifier), tag(preserve), nm)
 	return &b
 }
 

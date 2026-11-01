@@ -26,6 +26,7 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -153,17 +154,18 @@ type Task struct {
 	nostdlib                     bool   // -nostdlib
 	opt0                         bool   // -O0
 	packageNameSet               bool
-	pedantic                     bool // -pedantic
-	pedanticErrros               bool // -pedantic-errors
-	positions                    bool // -positions
-	prefixDefineSet              bool // --prefix-define <string>
-	pthread                      bool // -pthread
-	strictISOMode                bool // -ansi or stc=c90
-	unsignedEnums                bool // -unsigned-enums
-	verifyTypes                  bool // -verify-types
-	version                      bool // --version
-	winapiNoErrno                bool // --winapi-no-errno
-	doom                         bool // --doom
+	pedantic                     bool   // -pedantic
+	pedanticErrros               bool   // -pedantic-errors
+	positions                    bool   // -positions
+	prefixDefineSet              bool   // --prefix-define <string>
+	pthread                      bool   // -pthread
+	strictISOMode                bool   // -ansi or stc=c90
+	unsignedEnums                bool   // -unsigned-enums
+	verifyTypes                  bool   // -verify-types
+	version                      bool   // --version
+	winapiNoErrno                bool   // --winapi-no-errno
+	doom                         bool   // --doom
+	compactDataThreshold         uint32 // --compact-data[=<n>]; 0 = off
 }
 
 // NewTask returns a newly created Task. args[0] is the command name.
@@ -390,6 +392,21 @@ func (t *Task) main() (err error) {
 	set.Opt("pthread", func(arg string) error { t.pthread = true; t.cfgArgs = append(t.cfgArgs, arg); return nil })
 	set.Opt("unsigned-enums", func(arg string) error { t.unsignedEnums = true; return nil })
 	set.Opt("verify-types", func(arg string) error { t.verifyTypes = true; return nil })
+
+	set.OptionalArg("-compact-data", func(arg, val string) error {
+		if val == "" {
+			t.compactDataThreshold = 256
+			return nil
+		}
+
+		n, err := strconv.ParseUint(val, 10, 32)
+		if err != nil {
+			return errorf("invalid --compact-data value %q: %v", val, err)
+		}
+
+		t.compactDataThreshold = uint32(n)
+		return nil
+	})
 
 	// Ignored
 	set.Arg("framework", false, func(arg, val string) error { return nil }) // darwin/clang
