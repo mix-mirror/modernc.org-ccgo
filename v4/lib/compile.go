@@ -281,9 +281,9 @@ type ctx struct {
 	void          cc.Type
 	winapiFuncs   map[string]struct{}
 
-	nextID int
+	nextID      int
 	nextWordsID int
-	pass   int // 0: out of function, 1: func 1st pass, 2: func 2nd pass.
+	pass        int // 0: out of function, 1: func 1st pass, 2: func 2nd pass.
 
 	closed    bool
 	hasErrors bool

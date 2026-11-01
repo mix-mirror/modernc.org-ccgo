@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -22,7 +23,8 @@ import (
 // Three arrays stay literal, each for a different reason: small is below
 // the threshold, mut is not const, and sloc is a static local, whose words
 // variable would land in the function body while the array itself is
-// declared at package level.
+// declared at package level. The rows of the two-dimensional m2 and the
+// array members v of the struct elements of sa are compacted one by one.
 func TestCompactData(t *testing.T) {
 	const src = `
 #include <stdio.h>
@@ -45,6 +47,10 @@ const int small[3] = {1, 2, 3};
 /* not compacted: not const */
 int mut[13] = {-1, 2, -3, 4, -5, 6, -7, 8, -9, 10, -11, 12, -13};
 
+/* compacted row by row and member by member */
+const short m2[2][5] = {{-1, 2, -3, 4, -5}, {6, -7, 8, -9, 10}};
+const struct { int k; short v[6]; } sa[2] = {{1, {-1, 2, -3, 4, -5, 6}}, {2, {7, -8, 9, -10, 11, -12}}};
+
 int main(void) {
 	static const short sloc[6] = {-6, -5, -4, -3, -2, -1};
 	int i;
@@ -60,6 +66,9 @@ int main(void) {
 	for (i = 0; i < 3; i++)  printf("%d ", small[i]); printf("\n");
 	for (i = 0; i < 13; i++) printf("%d ", mut[i]); printf("\n");
 	for (i = 0; i < 6; i++)  printf("%d ", sloc[i]); printf("\n");
+	for (i = 0; i < 10; i++) printf("%d ", m2[i / 5][i % 5]); printf("\n");
+	for (i = 0; i < 12; i++) printf("%d ", sa[i / 6].v[i % 6]); printf("\n");
+	printf("%d %d\n", sa[0].k, sa[1].k);
 	return 0;
 }
 `
@@ -77,6 +86,9 @@ int main(void) {
 		"1 2 3 ",
 		"-1 2 -3 4 -5 6 -7 8 -9 10 -11 12 -13 ",
 		"-6 -5 -4 -3 -2 -1 ",
+		"-1 2 -3 4 -5 6 -7 8 -9 10 ",
+		"-1 2 -3 4 -5 6 7 -8 9 -10 11 -12 ",
+		"1 2",
 	}, "\n") + "\n"
 
 	dir := t.TempDir()
@@ -98,15 +110,18 @@ int main(void) {
 	}
 	gen := string(b)
 
-	// Every eligible array is initialized from a words variable.
+	// Every eligible array is initialized from a words variable of its own.
+	const fromWords = `\*\(\*\[\d+\][^)]+\)\(unsafe\.Pointer\(&__ccgo_words_\d+\)\)`
 	for _, name := range []string{"sc", "sh", "in", "un", "ll", "fl", "db", "bo", "co"} {
-		pat := fmt.Sprintf("var %s = *(*[", name)
-		if !strings.Contains(gen, pat) {
+		if !regexp.MustCompile(`(?m)^var ` + name + ` = ` + fromWords + `$`).MatchString(gen) {
 			t.Errorf("%s is not initialized from a words variable", name)
 		}
-		if !strings.Contains(gen, fmt.Sprintf("&__ccgo_words_")) {
-			t.Fatalf("no words variable in the generated Go")
-		}
+	}
+	if g, e := len(regexp.MustCompile(`(?m)^\s+[01]: `+fromWords+`,$`).FindAllString(gen, -1)), 2; g != e {
+		t.Errorf("got %d rows of m2 initialized from a words variable, expected %d", g, e)
+	}
+	if g, e := len(regexp.MustCompile(`(?m)^\s+Fv: `+fromWords+`,$`).FindAllString(gen, -1)), 2; g != e {
+		t.Errorf("got %d members sa[i].v initialized from a words variable, expected %d", g, e)
 	}
 
 	// small is below the threshold, mut is not const, sloc is a static

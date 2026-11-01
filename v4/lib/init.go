@@ -931,10 +931,11 @@ func (c *ctx) compactUnionInit(n cc.Node, a []initItem, t *cc.UnionType, off0 in
 	return &b
 }
 
-// compactArrayInit attempts to encode the array initializer as a compact byte
-// buffer embedded via [N]uint64 literal + unsafe.Pointer cast (same pattern as
-// compactUnionInit). Returns nil if ineligible, in which case the caller should
-// fall back to the normal indexed literal.
+// compactArrayInit encodes the initializer of the array t as the bytes of a
+// package-level [N]uint64 variable, written to w, and returns the array read
+// from it through unsafe.Pointer, the pattern of compactUnionInit. It returns
+// nil if the array is not eligible, and the caller falls back to the normal
+// indexed literal.
 func (c *ctx) compactArrayInit(w writer, n cc.Node, a []initItem, t *cc.ArrayType, off0 int64) *buf {
 	if c.task.compactDataThreshold == 0 {
 		return nil
@@ -952,15 +953,9 @@ func (c *ctx) compactArrayInit(w writer, n cc.Node, a []initItem, t *cc.ArrayTyp
 		return nil
 	}
 
-	// A static local array is initialized while a function body is being
-	// written, so the words variable would land in the function while the
-	// array itself is declared at package level. Leave those arrays alone
-	// until the words can be hoisted next to the declaration.
-	if c.f != nil {
-		return nil
-	}
-
-	// Must be a standalone array declaration, not a struct member or nested array.
+	// The declared object must be an array. The rows of a multi-dimensional
+	// array and the array members of its struct elements come here one by
+	// one and are compacted separately.
 	if c.declBeingInitialized.Type().Kind() != cc.Array {
 		return nil
 	}
@@ -1030,20 +1025,10 @@ func (c *ctx) compactArrayInit(w writer, n cc.Node, a []initItem, t *cc.ArrayTyp
 	// array once (one memmove), so the data ends up in memory twice: the
 	// words in SNOPTRDATA and the variable in SNOPTRBSS.
 	nWords := (totalBytes + 7) / 8
-	// c.id() is the function's counter inside a function body, so a
-	// global array and a static local one would collide. Use a counter
-	// that is unique across the whole translation unit.
-	//
-	// Inside a function body the words variable is a local name, not a
-	// package-level static: tag it preserve so the linker keeps the name
-	// instead of looking it up in the package dictionary, where a local
-	// is not registered.
+	// A counter of its own, not c.id(), which counts per function inside a
+	// function body, keeps the names unique in the translation unit.
 	c.nextWordsID++
-	tagName := tag(staticInternal)
-	if c.f != nil {
-		tagName = tag(preserve)
-	}
-	nm := fmt.Sprintf("%s__ccgo_words_%d", tagName, c.nextWordsID)
+	nm := fmt.Sprintf("%s__ccgo_words_%d", tag(staticInternal), c.nextWordsID)
 	w.w("\nvar %s = [%d]%suint64{", nm, nWords, tag(preserve))
 	for i := int64(0); i < nWords; i++ {
 		start := i * 8
