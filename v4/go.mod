@@ -14,7 +14,7 @@ require (
 	modernc.org/fileutil v1.4.0
 	modernc.org/gc/v2 v2.6.5
 	modernc.org/gc/v3 v3.2.0
-	modernc.org/libc v1.79.1
+	modernc.org/libc v1.79.2-0.20261101104013-87226bc1324e
 	modernc.org/mathutil v1.7.1
 	modernc.org/opt v0.2.0
 	modernc.org/strutil v1.2.1
