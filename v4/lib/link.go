@@ -603,6 +603,7 @@ type linker struct {
 	closed      bool
 	keepStrings bool
 	needFpFunc  bool
+	needPtrFunc bool
 	needUpFunc  bool
 }
 
@@ -1718,6 +1719,14 @@ func %s(f interface{}) uintptr {
 
 `, ccgoFP)
 	}
+	if l.needPtrFunc {
+		l.w(`
+
+func %s(p uintptr) unsafe.Pointer {
+	return unsafe.Pointer(p)
+}
+`, ccgoPtr)
+	}
 	if l.needUpFunc {
 		l.w(`
 
@@ -1906,6 +1915,8 @@ func (l *linker) print0(w writer, fi *fnInfo, n interface{}) {
 			switch id {
 			case tag(preserve) + ccgoFP:
 				l.needFpFunc = true
+			case tag(preserve) + ccgoPtr:
+				l.needPtrFunc = true
 			case tag(preserve) + ccgoUP:
 				l.needUpFunc = true
 			}

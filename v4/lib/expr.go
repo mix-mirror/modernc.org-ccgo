@@ -47,7 +47,10 @@ const (
 	// still uintptr for backward compatibility. Only the parameter name is now
 	// enforced. Poor man's type annotation.
 	ccgoFuncParam = "__ccgo_fp_"
-	ccgoTS        = "__ccgo_ts"
+	// Converts a C pointer, a uintptr, to unsafe.Pointer. Defined by the
+	// linker, see unsafeFromUintptr.
+	ccgoPtr = "__ccgo_ptr"
+	ccgoTS  = "__ccgo_ts"
 	// Returns unsafe.Pointer. No longer emitted, the linker defines it only for
 	// object files of older ccgo versions that use it.
 	ccgoUP = "__ccgo_up"

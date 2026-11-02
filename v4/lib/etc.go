@@ -985,8 +985,18 @@ func unsafe(fn string, arg interface{}) string {
 func unsafePointer(arg interface{}) string { return unsafe("Pointer", arg) }
 
 // unsafeFromUintptr converts the uintptr arg to unsafe.Pointer without
-// triggering go vet -unsafeptr and at no run time cost, see #45.
-func unsafeFromUintptr(arg interface{}) string { return unsafe("Add", fmt.Sprintf("nil, %s", arg)) }
+// triggering go vet -unsafeptr at every use, see #45. The linker defines
+// __ccgo_ptr as a plain conversion, which is inlined.
+//
+// It must not be unsafe.Add(nil, arg). The compiler folds that into the plain
+// uintptr, so *p and *(p+4) share one base, and since Go 1.27 the arm64
+// backend pairs such loads into one LDP even when the second one is in a
+// conditional block. The second load then always executes and faults when the
+// C object ends at the end of a mapping. The price is that, as with a plain
+// conversion, adjacent narrow loads are no longer combined into a wider one.
+func unsafeFromUintptr(arg interface{}) string {
+	return fmt.Sprintf("%s%s(%s)", tag(preserve), ccgoPtr, arg)
+}
 
 func unsafeAddr(arg interface{}) string {
 	return fmt.Sprintf("%sunsafe.%sPointer(&(%s))", tag(importQualifier), tag(preserve), arg)
