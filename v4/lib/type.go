@@ -14,6 +14,10 @@ import (
 )
 
 func (c *ctx) typedef(n cc.Node, t cc.Type) string {
+	c.definingType++
+
+	defer func() { c.definingType-- }()
+
 	var b strings.Builder
 	c.typ0(&b, n, t, false, false, false)
 	return b.String()
@@ -188,6 +192,9 @@ func (c *ctx) typ0(b *strings.Builder, n cc.Node, t cc.Type, useTypenames, useTa
 			c.typ0(b, n, x.UnderlyingType(), false, false, false)
 		}
 	case *cc.StructType:
+		if c.definingType == 0 {
+			c.checkLayout(n, x, false)
+		}
 		nmTag := x.Tag()
 		switch nm := nmTag.SrcStr(); {
 		case nm != "" && x.LexicalScope().Parent == nil && useTags:
@@ -294,6 +301,9 @@ func (c *ctx) typ0(b *strings.Builder, n cc.Node, t cc.Type, useTypenames, useTa
 			b.WriteString("\n}")
 		}
 	case *cc.UnionType:
+		if c.definingType == 0 {
+			c.checkLayout(n, x, false)
+		}
 		nmTag := x.Tag()
 		switch nm := nmTag.SrcStr(); {
 		case nm != "" && x.LexicalScope().Parent == nil && useTags:
@@ -594,6 +604,10 @@ func (c *ctx) defineStructType(w writer, sep string, n cc.Node, t *cc.StructType
 		return
 	}
 
+	c.definingType++
+
+	defer func() { c.definingType-- }()
+
 	nmt := t.Tag()
 	if nm := nmt.SrcStr(); nm != "" && t.LexicalScope().Parent == nil {
 		rhs := c.structLiteral(n, t)
@@ -612,6 +626,10 @@ func (c *ctx) defineUnionType(w writer, sep string, n cc.Node, t *cc.UnionType) 
 	if t.IsIncomplete() {
 		return
 	}
+
+	c.definingType++
+
+	defer func() { c.definingType-- }()
 
 	nmt := t.Tag()
 	if nm := nmt.SrcStr(); nm != "" && t.LexicalScope().Parent == nil {
@@ -699,6 +717,10 @@ func (c *ctx) defineType0(w writer, sep string, n cc.Node, t cc.Type) {
 	if !c.isValidType1(n, t, false) {
 		return
 	}
+
+	c.definingType++
+
+	defer func() { c.definingType-- }()
 
 	switch x := t.(type) {
 	case *cc.EnumType:

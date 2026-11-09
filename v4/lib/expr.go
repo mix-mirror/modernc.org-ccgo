@@ -115,6 +115,15 @@ func (c *ctx) expr(w writer, n cc.ExpressionNode, to cc.Type, toMode mode) (ret 
 		return &buf{}
 	}
 
+	c.checkLayout(n, n.Type(), true)
+	if x, ok := n.(*cc.UnaryExpression); ok {
+		switch x.Case {
+		case cc.UnaryExpressionSizeofType, cc.UnaryExpressionAlignofType:
+			c.checkLayout(n, x.TypeName.Type(), false)
+		case cc.UnaryExpressionSizeofExpr, cc.UnaryExpressionAlignofExpr:
+			c.checkLayout(n, x.UnaryExpression.Type(), false)
+		}
+	}
 	if to == nil {
 		to = n.Type()
 	}

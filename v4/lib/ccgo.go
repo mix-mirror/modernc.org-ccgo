@@ -82,6 +82,7 @@ type Task struct {
 	libcExportsOnce       sync.Once
 	libcExportsSet        nameSet // see libcExports
 	linkFiles             []string
+	noPackedWarningNames  nameSet  // --no-packed-warning=<comma separated tags or typedef names>
 	o                     string   // -o
 	packageName           string   // --package-name
 	predef                []string // --predef
@@ -115,6 +116,7 @@ type Task struct {
 	routes       string // -map <comma separated list>
 	std          string // -std
 	stderr       io.Writer
+	stderrMu     sync.Mutex // see Task.warn
 	stdout       io.Writer
 	target       string
 	tlsQualifier string              // eg. "libc."
@@ -150,6 +152,7 @@ type Task struct {
 	noBuiltin                    bool   // -fno-builtin
 	noMainMinimize               bool   // -no-main-minimize
 	noObjFmt                     bool   // -no-object-file-format
+	noPackedWarning              bool   // --no-packed-warning, see packed.go
 	nostdinc                     bool   // -nostdinc
 	nostdlib                     bool   // -nostdlib
 	opt0                         bool   // -O0
@@ -163,6 +166,7 @@ type Task struct {
 	unsignedEnums                bool   // -unsigned-enums
 	verifyTypes                  bool   // -verify-types
 	version                      bool   // --version
+	warnABILayout                bool   // --warn-abi-layout, see packed.go
 	winapiNoErrno                bool   // --winapi-no-errno
 	doom                         bool   // --doom
 	compactDataThreshold         uint32 // --compact-data[=<n>]; 0 = off
@@ -342,6 +346,20 @@ func (t *Task) main() (err error) {
 		return nil
 	})
 	set.Arg("-hot-switch", false, func(arg, val string) error { t.hotSwitch = val; return nil })
+	set.OptionalArg("-no-packed-warning", func(arg, val string) error {
+		if val == "" {
+			t.noPackedWarning = true
+			return nil
+		}
+
+		for _, v := range strings.Split(val, ",") {
+			if v = strings.TrimSpace(v); v != "" {
+				t.noPackedWarningNames.add(v)
+			}
+		}
+		return nil
+	})
+	set.Opt("-warn-abi-layout", func(arg string) error { t.warnABILayout = true; return nil })
 	set.Arg("-winabi", false, func(arg, val string) error { t.winabi = val; return nil })
 	set.Arg("-winapi-test", false, func(arg, val string) error { t.winapiTest = val; return nil })
 	set.Arg("-winapi", false, func(arg, val string) error {

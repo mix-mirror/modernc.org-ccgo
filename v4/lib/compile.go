@@ -247,6 +247,7 @@ type ctx struct {
 	defineTaggedEnums    map[string]*cc.EnumType
 	defineTaggedStructs  map[string]*cc.StructType
 	defineTaggedUnions   map[string]*cc.UnionType
+	definingType         int // > 0 while defining a type, see checkLayout
 	eh                   errHandler
 	enumerators          nameSet
 	exprNestLevel        int
@@ -268,6 +269,7 @@ type ctx struct {
 	macrosEmited  nameSet
 	maxAlign      int
 	out           io.Writer
+	layoutWarned  map[any]struct{} // see checkLayout
 	pvoid         cc.Type
 	signedInts    [9]cc.Type
 	switchCtx     map[*cc.LabeledStatement]string

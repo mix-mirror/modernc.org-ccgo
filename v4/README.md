@@ -63,3 +63,28 @@ Transpiled code converts `uintptr` C pointers to `unsafe.Pointer`, which the `un
 Replaces large const scalar array initializers with a compact `[N]uint64`
 literal cast through `unsafe.Pointer`. Optional threshold argument, default
 256 elements.
+
+## Packed structs, `--no-packed-warning` and `--warn-abi-layout`
+
+`ccgo` ignores `__attribute__((packed))` and `#pragma pack`: a Go struct cannot
+have a misaligned field. Transpiled code agrees with itself, but where packing
+changes the layout of a struct or union in the target's C compiler, memory
+shared with code not compiled by `ccgo`, or bytes read as such a struct, like a
+network header or a file format, are interpreted wrong.
+
+`ccgo` therefore warns, once per translation unit and type, where it uses such
+a type: an object of it, an expression of it or of a pointer to it, `sizeof`
+or `_Alignof` of it. Defining the type, for example in an included header, does
+not warn. `--no-packed-warning` silences all these warnings,
+`--no-packed-warning=<names>` only those for the comma separated struct or
+union tags or typedef names.
+
+Bit-fields are laid out so that they never share bytes with other members,
+which also differs from the C compiler in many cases, for example
+`struct { char a, b, c; unsigned f:4; int x; }` is 12 bytes in `ccgo` but 8 in
+gcc on Linux. That is common and rarely matters, so it does not warn by
+default.
+`--warn-abi-layout` reports, at the same places, every struct or union whose
+size or alignment differs from the target's C compiler, whatever the cause,
+including packing when its warning is silenced. Member offsets that differ
+while the size and alignment agree are not reported.
