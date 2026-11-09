@@ -4781,6 +4781,7 @@ assets/github.com/vnmakarov/mir/c-tests/lacc/main42.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/negate.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/nested-macro.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/offsetof.c
+assets/github.com/vnmakarov/mir/c-tests/lacc/old-param-decay.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/old-style-declaration.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/old-style-definition.c
 assets/github.com/vnmakarov/mir/c-tests/lacc/padded-initialization.c
