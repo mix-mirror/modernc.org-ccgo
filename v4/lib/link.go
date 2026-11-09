@@ -1933,10 +1933,12 @@ func (l *linker) print0(w writer, fi *fnInfo, n interface{}) {
 
 			obj := fi.linker.externs[id]
 			if obj == nil {
-				r := l.rawName(nm)
+				// nm is fi.name(id), which already has the tag of id
+				// replaced by prefixUndefined.
+				r := l.rawName(id)
 				w.w("%s%s", l.task.prefixUndefined, r)
 				if !l.task.ignoreLinkErrors && l.undefsReported.add(r) {
-					l.err(errorf("%v: undefined: %q %v", x.Position(), r, symKind(nm)))
+					l.err(errorf("%v: undefined: %q %v", x.Position(), r, symKind(id)))
 				}
 				return
 			}
