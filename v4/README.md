@@ -88,3 +88,9 @@ default.
 size or alignment differs from the target's C compiler, whatever the cause,
 including packing when its warning is silenced. Member offsets that differ
 while the size and alignment agree are not reported.
+
+The warnings go to stderr and do not fail the compilation. A generator that
+runs `ccgo` can collect them and compare them, without their positions,
+against a list of the differences known to be harmless for the code at hand,
+and fail on any new or vanished one. A change in the C sources, in their
+configuration or in `ccgo` that affects a layout then does not go unnoticed.
