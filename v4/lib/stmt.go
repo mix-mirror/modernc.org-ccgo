@@ -346,6 +346,11 @@ func (c *ctx) compoundStatement(w writer, n *cc.CompoundStatement, fnBlock bool,
 			break
 		}
 
+		if last := c.bitFieldStores(w, l, value != ""); last != nil {
+			l, bi = last, last.BlockItem
+			continue
+		}
+
 		c.blockItem(w, bi)
 	}
 	switch {
@@ -1252,6 +1257,11 @@ func (c *ctx) unbracedStatement(w writer, n *cc.Statement) {
 	case cc.StatementCompound:
 		w.w("%s", sep(n))
 		for l := n.CompoundStatement.BlockItemList; l != nil; l = l.BlockItemList {
+			if last := c.bitFieldStores(w, l, false); last != nil {
+				l = last
+				continue
+			}
+
 			c.blockItem(w, l.BlockItem)
 		}
 		w.w("%s", sep(n.CompoundStatement.Token2))

@@ -4344,6 +4344,11 @@ func (c *ctx) postfixExpressionCall(w writer, n *cc.PostfixExpression, mode mode
 			}
 		}
 		for l := inlineFD.CompoundStatement.BlockItemList; l != nil; l = l.BlockItemList {
+			if last := c.bitFieldStores(w, l, false); last != nil {
+				l = last
+				continue
+			}
+
 			c.blockItem(w, l.BlockItem)
 		}
 		if nfo.exit != "" {
