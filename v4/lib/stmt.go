@@ -300,6 +300,9 @@ func (c *ctx) compoundStatement(w writer, n *cc.CompoundStatement, fnBlock bool,
 				w.w("defer %stls.FreeAlloca()();", tag(ccgo))
 			}
 		}
+		if c.singleExit() {
+			w.w("{")
+		}
 	default:
 		if !flat {
 			w.w(" {\n %s%s", sep(n.Token), c.posComment(n))
@@ -346,6 +349,18 @@ func (c *ctx) compoundStatement(w writer, n *cc.CompoundStatement, fnBlock bool,
 		c.blockItem(w, bi)
 	}
 	switch {
+	case fnBlock && c.f.exit != "":
+		w.w("%s};", sep(n.Token2))
+		if c.f.exitUsed {
+			w.w("\n%s:", c.f.exit)
+		}
+		switch {
+		case c.f.t.Result().Kind() != cc.Void:
+			w.w("return %s%s;", tag(ccgo), retvalName)
+		default:
+			w.w("return;")
+		}
+		w.w("};")
 	case fnBlock && c.f.t.Result().Kind() != cc.Void && !c.isReturn(bi):
 		s := sep(n.Token2)
 		if strings.Contains(s, "\n") {
@@ -362,6 +377,49 @@ func (c *ctx) compoundStatement(w writer, n *cc.CompoundStatement, fnBlock bool,
 			w.w("};")
 		}
 	}
+}
+
+// maxOpenCodedDefers is the limit of the Go compiler, in
+// cmd/compile/internal/ssagen/ssa.go, for open-coding the defers of a function:
+// the number of its return statements times the number of its defer statements.
+const maxOpenCodedDefers = 15
+
+// singleExit decides, at the start of the body in pass 2, whether the returns of
+// the function become jumps to a single return at its end, and if so names the
+// label there.
+//
+// The Go compiler open-codes the deferred calls of a function at each of its
+// returns, but not above maxOpenCodedDefers. There every call pays for
+// runtime.deferprocStack and runtime.deferreturn, close to half the cost of a
+// function like QuickJS's JS_GetPropertyInternal, which has 25 returns and the
+// defer freeing its TLS frame. With a single return the defers are open-coded
+// again. They still run when a panic, like the one a longjmp is, unwinds the
+// frame, which freeing the TLS frame before each return would not do.
+//
+// The body is emitted as a block of its own, so the jump to the label after it
+// never skips a variable declaration in the scope of the label. Returns in the
+// deferred closures of the setjmp lowerings return from the closure and stay as
+// they are. The defers are counted generously: another function using a single
+// exit only changes its form.
+func (c *ctx) singleExit() bool {
+	f := c.f
+	defers := f.setJmps
+	if f.tlsAllocs+int64(f.maxVaListSize) != 0 || c.goPtr != nil && c.goPtr.lostCand[f.d] {
+		defers++
+	}
+	if f.vlaSizes != nil {
+		defers++
+	}
+	if f.callsAlloca {
+		defers++
+	}
+	// The return at the end of the body counts too.
+	if defers == 0 || (f.returns+1)*defers <= maxOpenCodedDefers {
+		return false
+	}
+
+	f.exit = c.label()
+	return true
 }
 
 func (c *ctx) isReturn(n *cc.BlockItem) bool {
@@ -1487,21 +1545,34 @@ func (c *ctx) jumpStatement(w writer, n *cc.JumpStatement) {
 			return
 		}
 
+		// ret is the jump to the single exit or the return, see singleExit.
+		ret := "return;"
+		if c.f.inDefer == 0 {
+			if c.pass == 1 {
+				c.f.returns++
+			}
+			if c.f.exit != "" {
+				ret = fmt.Sprintf("goto %s;", c.f.exit)
+				c.f.exitUsed = true
+			}
+		}
 		switch {
 		case n.ExpressionList != nil:
 			switch {
 			case c.f.t.Result().Kind() == cc.Void:
-				w.w("%s; return;", c.expr(w, n.ExpressionList, nil, exprVoid))
+				w.w("%s; %s", c.expr(w, n.ExpressionList, nil, exprVoid), ret)
 			default:
 				switch {
 				case c.f.inDefer != 0:
 					w.w("%s = %s; return;", retvalName, c.checkVolatileExpr(w, n.ExpressionList, c.f.t.Result(), exprDefault))
+				case c.f.exit != "":
+					w.w("%s%s = %s; %s", tag(ccgo), retvalName, c.checkVolatileExpr(w, n.ExpressionList, c.f.t.Result(), exprDefault), ret)
 				default:
 					w.w("return %s;", c.checkVolatileExpr(w, n.ExpressionList, c.f.t.Result(), exprDefault))
 				}
 			}
 		default:
-			w.w("return;")
+			w.w("%s", ret)
 		}
 	default:
 		c.err(errorf("internal error %T %v", n, n.Case))

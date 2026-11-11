@@ -79,6 +79,8 @@ type fnCtx struct {
 	compoundLiterals              map[cc.ExpressionNode]int64
 	d                             *cc.Declarator
 	declInfos                     declInfos
+	exit                          string // pass 2: the label of the single return, see singleExit
+	exitUsed                      bool   // a jump to exit was emitted
 	flatScopes                    map[*cc.Scope]struct{}
 	fnResults                     map[cc.ExpressionNode]int64
 	hasSwitchInIterationStatement bool
@@ -89,7 +91,9 @@ type fnCtx struct {
 	locals                        map[*cc.Declarator]string // storage: static or automatic, linkage: none -> C renamed
 	maxVaListSize                 int64
 	nextID                        int
+	returns                       int  // pass 1: the returns of the function itself, see singleExit
 	setJmpInLoop                  bool // a setjmp in the body sits inside an iteration statement
+	setJmps                       int  // calls of setjmp in the body
 	t                             *cc.FunctionType
 	tlsAllocs                     int64
 	vaListOffs                    map[cc.ExpressionNode]int64
@@ -139,12 +143,14 @@ next:
 	inIterationStatement := 0
 	hasSwitchInIterationStatement := false
 	setJmpInLoop := false
+	setJmps := 0
 	walkC(n, func(n cc.Node, mode int) {
 		switch x := n.(type) {
 		case *cc.PostfixExpression:
 			if mode == walkPre && x.Case == cc.PostfixExpressionCall {
-				if inIterationStatement > 0 {
-					if fn, _ := c.isCall(x); fn != nil && c.isIdentifier(fn) == "setjmp" {
+				if c.isIdentifier(x.PostfixExpression) == "setjmp" {
+					setJmps++
+					if inIterationStatement > 0 {
 						setJmpInLoop = true
 					}
 				}
@@ -211,6 +217,7 @@ next:
 		flatScopes:                    flatScopes,
 		hasSwitchInIterationStatement: hasSwitchInIterationStatement,
 		setJmpInLoop:                  setJmpInLoop,
+		setJmps:                       setJmps,
 		t:                             t,
 	}
 }
