@@ -20,14 +20,18 @@ import (
 // few. sink stores its argument, so v is in the TLS frame. The longjmp unwinds
 // many, whose deferred free must still run, which the address of a local in a
 // frame allocated before and after shows. The first printf grows the TLS stack,
-// p0 is taken after it.
+// p0 is taken after it. Where ccgo does not lower setjmp, see setjmpLowered, the
+// longjmp is left out.
 func TestSingleExit(t *testing.T) {
 	const src = `
-#include <setjmp.h>
 #include <stdint.h>
 #include <stdio.h>
 
+#ifndef NO_SETJMP
+#include <setjmp.h>
+
 static jmp_buf jb;
+#endif
 
 int *gp;
 
@@ -42,9 +46,11 @@ int many(int x) {
 	sink(&v);
 	R(0) R(1) R(2) R(3) R(4) R(5) R(6) R(7) R(8) R(9)
 	R(10) R(11) R(12) R(13) R(14) R(15) R(16)
+#ifndef NO_SETJMP
 	if (x == 99) {
 		longjmp(jb, 1);
 	}
+#endif
 	return -v;
 }
 
@@ -79,12 +85,14 @@ int main(void) {
 		manyVoid(i);
 	}
 	printf("%d %d %d %d\n", s, nvoid, few(0), few(1));
+#ifndef NO_SETJMP
 	if (setjmp(jb) == 0) {
 		many(99);
 		printf("not reached\n");
 	} else {
 		printf("longjmp\n");
 	}
+#endif
 	printf("balanced %d\n", probe() == p0);
 	return 0;
 }
@@ -95,8 +103,12 @@ int main(void) {
 		t.Fatal(err)
 	}
 
+	var defs []string
+	if !setjmpLowered() {
+		defs = []string{"-DNO_SETJMP"}
+	}
 	bin := filepath.Join(dir, enforceBinaryExt("cbin"))
-	if out, err := exec.Command(hostCC, "-o", bin, "-w", cFile).CombinedOutput(); err != nil {
+	if out, err := exec.Command(hostCC, append(defs, "-o", bin, "-w", cFile)...).CombinedOutput(); err != nil {
 		t.Skipf("hostCC cannot build the reference: %v\n%s", err, out)
 	}
 
@@ -107,7 +119,7 @@ int main(void) {
 
 	goFile := filepath.Join(dir, "test.go")
 	var stdout, stderr bytes.Buffer
-	if err := NewTask(goos, goarch, []string{"ccgo", "-o", goFile, cFile}, &stdout, &stderr, nil).Main(); err != nil {
+	if err := NewTask(goos, goarch, append(append([]string{"ccgo"}, defs...), "-o", goFile, cFile), &stdout, &stderr, nil).Main(); err != nil {
 		t.Fatalf("%v\n%s", err, stderr.Bytes())
 	}
 

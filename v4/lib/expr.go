@@ -2311,7 +2311,7 @@ out:
 		case "longjmp":
 			jb := c.expr(w, n.ArgumentExpressionList.AssignmentExpression, c.pvoid, exprDefault)
 			val := c.expr(w, n.ArgumentExpressionList.ArgumentExpressionList.AssignmentExpression, c.ast.Int, exprDefault)
-			b.w("%stls.%[1]sLongjmp(%s, %s)", tag(preserve), jb, val)
+			b.w("%stls.%sLongjmp(%s, %s)", tag(ccgo), tag(preserve), jb, val)
 			return &b, c.ast.Void, mode
 		case
 			"__atomic_fetch_add",

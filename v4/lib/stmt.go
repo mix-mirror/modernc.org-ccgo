@@ -544,6 +544,15 @@ func (c *ctx) selectionStatement(w writer, n *cc.SelectionStatement) {
 	}
 }
 
+// The names the setjmp lowerings declare. Like the TLS parameter and the
+// result of the function, they carry the ccgo tag, so the linker renames them
+// where the C code uses the same name. Kept verbatim instead, x and caught were
+// taken for a C variable of that name, or hid it.
+var (
+	setJmpCaught = tag(ccgo) + "caught" // the result of the try closure, see setJmpTryCatch
+	setJmpX      = tag(ccgo) + "x"      // the recovered value, see setJmpRecover
+)
+
 // setJmpRecover emits the head of the type switch on the recovered value used by
 // the setjmp lowerings. The value is bound to a name because the default clause
 // must be able to re-raise it, see setJmpRecoverDefault.
@@ -556,8 +565,8 @@ func (c *ctx) selectionStatement(w writer, n *cc.SelectionStatement) {
 // two statement form below is valid Go both before and after the substitution.
 func (c *ctx) setJmpRecover(w writer) {
 	pp := tag(preserve)
-	w.w("\n%sx := %srecover();", pp, pp)
-	w.w("\nswitch %sx.(%stype) {", pp, pp)
+	w.w("\n%s := %srecover();", setJmpX, pp)
+	w.w("\nswitch %s.(%stype) {", setJmpX, pp)
 }
 
 // setJmpRecoverForeign emits, at the head of the LongjmpRetval clause, the guard
@@ -572,11 +581,11 @@ func (c *ctx) setJmpRecover(w writer) {
 // itself, so the region that does recognise the value must not disarm again.
 func (c *ctx) setJmpRecoverForeign(w writer, buf, pop string) {
 	pp := tag(preserve)
-	w.w("\nif %sx.(%s%sLongjmpRetval).%sJumpBuffer != %s {", pp, c.task.tlsQualifier, pp, pp, buf)
+	w.w("\nif %s.(%s%sLongjmpRetval).%sJumpBuffer != %s {", setJmpX, c.task.tlsQualifier, pp, pp, buf)
 	if pop != "" {
-		w.w("\n%stls.%sPopJumpBuffer(%s)", pp, pp, pop)
+		w.w("\n%stls.%sPopJumpBuffer(%s)", tag(ccgo), pp, pop)
 	}
-	w.w("\n%spanic(%sx)", pp, pp)
+	w.w("\n%spanic(%s)", pp, setJmpX)
 	// Terminated, the catch emitted next carries the separator of its C source and
 	// that is empty for a one line "if (setjmp(jb)) return x;".
 	w.w("\n};")
@@ -604,10 +613,10 @@ func (c *ctx) setJmpRecoverDefault(w writer, v string) {
 	pp := tag(preserve)
 	w.w("\n%sdefault:", pp)
 	if v != "" {
-		w.w("\n%stls.%sPopJumpBuffer(%s)", pp, pp, v)
+		w.w("\n%stls.%sPopJumpBuffer(%s)", tag(ccgo), pp, v)
 	}
-	w.w("\nif %sx != %snil {", pp, pp)
-	w.w("\n%spanic(%sx)", pp, pp)
+	w.w("\nif %s != %snil {", setJmpX, pp)
+	w.w("\n%spanic(%s)", pp, setJmpX)
 	w.w("\n}")
 }
 
@@ -671,12 +680,12 @@ func (c *ctx) setJmpTryCatch(w writer, v string, try, catch *cc.Statement) {
 	if armTail {
 		pop = "" // The function level defer owns it.
 	}
-	w.w("\nif (func() (%scaught %sbool) {", pp, pp)
+	w.w("\nif (func() (%s %sbool) {", setJmpCaught, pp)
 	w.w("\ndefer func() {")
 	c.setJmpRecover(w)
 	w.w("\ncase %s%sLongjmpRetval:", c.task.tlsQualifier, pp)
 	c.setJmpRecoverForeign(w, v, pop)
-	w.w("\n%scaught = %strue", pp, pp)
+	w.w("\n%s = %strue", setJmpCaught, pp)
 	c.setJmpRecoverDefault(w, pop)
 	w.w("\n}")
 	w.w("\n}();")
@@ -685,7 +694,7 @@ func (c *ctx) setJmpTryCatch(w writer, v string, try, catch *cc.Statement) {
 	w.w("\n}()) {")
 	if armTail {
 		// Longjmp popped the buffer on its way here and C keeps it armed.
-		w.w("\n%stls.%sPushJumpBuffer(%s);", pp, pp, v)
+		w.w("\n%stls.%sPushJumpBuffer(%s);", tag(ccgo), pp, v)
 	}
 	if catch != nil {
 		c.statement(w, catch)
@@ -748,7 +757,7 @@ func (c *ctx) setJmpNeq0(w writer, n *cc.SelectionStatement) (r bool) {
 	v := c.f.newLiveAutovarType(n, c.pvoid)
 	jb := c.expr(w, arg, nil, exprDefault)
 	w.w("\n%s = %s;", v, jb)
-	w.w("\n%stls.%[1]sPushJumpBuffer(%s)", tag(preserve), v)
+	w.w("\n%stls.%sPushJumpBuffer(%s)", tag(ccgo), tag(preserve), v)
 
 	func() {
 		c.f.inDefer++
@@ -828,7 +837,7 @@ func (c *ctx) setJmpEqM1(w writer, n *cc.SelectionStatement) (r bool) {
 	v := c.f.newLiveAutovarType(n, c.pvoid)
 	jb := c.expr(w, arg, nil, exprDefault)
 	w.w("\n%s = %s;", v, jb)
-	w.w("\n%stls.%[1]sPushJumpBuffer(%s)", tag(preserve), v)
+	w.w("\n%stls.%sPushJumpBuffer(%s)", tag(ccgo), tag(preserve), v)
 
 	func() {
 		c.f.inDefer++
@@ -914,7 +923,7 @@ func (c *ctx) notSetJmp(w writer, n *cc.SelectionStatement) (r bool) {
 	v := c.f.newLiveAutovarType(n, c.pvoid)
 	jb := c.expr(w, arg, nil, exprDefault)
 	w.w("\n%s = %s;", v, jb)
-	w.w("\n%stls.%[1]sPushJumpBuffer(%s)", tag(preserve), v)
+	w.w("\n%stls.%sPushJumpBuffer(%s)", tag(ccgo), tag(preserve), v)
 	c.setJmpTryCatch(w, v, n.Statement, n.Statement2)
 	return true
 }
@@ -980,7 +989,7 @@ func (c *ctx) setJmpEq0(w writer, n *cc.SelectionStatement) (r bool) {
 	v := c.f.newLiveAutovarType(n, c.pvoid)
 	jb := c.expr(w, arg, nil, exprDefault)
 	w.w("\n%s = %s;", v, jb)
-	w.w("\n%stls.%[1]sPushJumpBuffer(%s)", tag(preserve), v)
+	w.w("\n%stls.%sPushJumpBuffer(%s)", tag(ccgo), tag(preserve), v)
 	c.setJmpTryCatch(w, v, n.Statement, n.Statement2)
 	return true
 }
@@ -1574,7 +1583,7 @@ func (c *ctx) jumpStatement(w writer, n *cc.JumpStatement) {
 			default:
 				switch {
 				case c.f.inDefer != 0:
-					w.w("%s = %s; return;", retvalName, c.checkVolatileExpr(w, n.ExpressionList, c.f.t.Result(), exprDefault))
+					w.w("%s%s = %s; return;", tag(ccgo), retvalName, c.checkVolatileExpr(w, n.ExpressionList, c.f.t.Result(), exprDefault))
 				case c.f.exit != "":
 					w.w("%s%s = %s; %s", tag(ccgo), retvalName, c.checkVolatileExpr(w, n.ExpressionList, c.f.t.Result(), exprDefault), ret)
 				default:
