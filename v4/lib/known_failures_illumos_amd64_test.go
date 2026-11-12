@@ -7,6 +7,8 @@ package ccgo // import "modernc.org/ccgo/v4/lib"
 var testExecKnownFails = map[string]struct{}{
 	// ==== EXEC FAIL - compiles and builds but fails when executed.
 
+	`assets/benchmarksgame-team.pages.debian.net/reverse-complement-2.c`:                     {}, // EXEC FAIL: : assets/benchmarksgame-team.pages.debian.net/reverse-complement-2.c: unexpected fault address 0xfffffc7feeb8ffff, UB on the empty stdin TestExec provides, the C reference usually segfaults too.
+	`assets/benchmarksgame-team.pages.debian.net/reverse-complement-5.c`:                     {}, // EXEC FAIL: Same as reverse-complement-2.c.
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20031003-1.c`:                      {}, // EXEC FAIL: : assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20031003-1.c: SIGABRT: used by abort, replace SIGIOT in the future
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20101011-1.c`:                      {}, // EXEC FAIL: : assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20101011-1.c: panic: runtime error: integer divide by zero
 	`assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/built-in-setjmp.c`:                 {}, // EXEC FAIL: : assets/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/built-in-setjmp.c: libc.go:2652:Xlongjmp: TODOTODO
