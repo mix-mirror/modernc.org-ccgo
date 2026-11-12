@@ -634,6 +634,12 @@ func (c *ctx) verifyTypes() {
 		return
 	}
 
+	// c.verify has the types ccgo rendered while defining types too. Checking
+	// them is not a use, see checkLayout.
+	c.definingType++
+
+	defer func() { c.definingType-- }()
+
 	// Rendering a type for its ID adds its field types to c.verify, and a
 	// range may or may not visit entries added during it, so repeat until no
 	// new types show up. Of the types with the same ID keep the one that sorts

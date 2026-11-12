@@ -127,9 +127,13 @@ func (c *ctx) checkLayout(n cc.Node, t cc.Type, deref bool) {
 	}
 }
 
-// warn writes a warning to the task's stderr. Translation units compile
-// concurrently.
+// warn writes a warning to the task's stderr, if it has one. Translation units
+// compile concurrently.
 func (t *Task) warn(s string, args ...any) {
+	if t.stderr == nil {
+		return
+	}
+
 	t.stderrMu.Lock()
 
 	defer t.stderrMu.Unlock()

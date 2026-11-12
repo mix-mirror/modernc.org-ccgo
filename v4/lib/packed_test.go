@@ -16,8 +16,9 @@ import (
 // TestPackedWarning checks that ccgo warns, once per type, where it uses a
 // struct or union whose layout packing changes in the target's C compiler,
 // see packed.go, and not where packing changes nothing or the type is only
-// defined. The members are chosen so that packing changes the layout on every
-// target.
+// defined, also with -verify-types, whose checks render every type ccgo saw. A
+// task without stderr does not warn. The members are chosen so that packing
+// changes the layout on every target.
 func TestPackedWarning(t *testing.T) {
 	const src = `
 #include <stddef.h>
@@ -65,6 +66,7 @@ unsigned long fu(void) { struct u v = {0}; return sizeof v + v.c; }
 		want []string
 	}{
 		{"", all},
+		{"-verify-types", all},
 		{"--no-packed-warning=a,T", []string{"struct b", "struct q", "struct r", "union un", "struct pp"}},
 		{"--no-packed-warning", nil},
 	} {
@@ -102,6 +104,17 @@ unsigned long fu(void) { struct u v = {0}; return sizeof v + v.c; }
 				}
 			}
 		}
+	}
+
+	// TestSQLite and others pass no stdout and stderr.
+	dir := t.TempDir()
+	cFile := filepath.Join(dir, "test.c")
+	if err := os.WriteFile(cFile, []byte(src), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := NewTask(goos, goarch, []string{"ccgo", "-c", "-verify-types", "-o", filepath.Join(dir, "test.o.go"), cFile}, nil, nil, nil).Main(); err != nil {
+		t.Errorf("no stderr: %v", err)
 	}
 }
 
